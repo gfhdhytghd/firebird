@@ -5,24 +5,51 @@ import QtQuick 2.0
 import QtQuick.Controls 1.2
 import QtQuick.Dialogs 1.1
 import QtQuick.Layouts 1.0
+import QtQuick.Window 2.2
 
 ApplicationWindow {
     id: app
     title: "Firebird Emu"
     visible: true
+    color: "black"
 
     property bool closeAfterSuspend: false
     property bool ignoreSuspendOnClose: false
+    property int safeTop: 0
+    property int safeLeft: 0
+    property int safeRight: 0
 
-    onXChanged: Emu.mobileX = x
-    onYChanged: Emu.mobileY = y
-    width: Emu.mobileWidth != -1 ? Emu.mobileWidth : 320
-    onWidthChanged: Emu.mobileWidth = width
-    height: Emu.mobileHeight != -1 ? Emu.mobileHeight : 480
-    onHeightChanged: Emu.mobileHeight = height
+    function updateSafeArea() {
+        if (!Emu.isMobile())
+            return;
+        safeTop = Emu.safeAreaTop();
+        safeLeft = Emu.safeAreaLeft();
+        safeRight = Emu.safeAreaRight();
+    }
+
+    visibility: Emu.isMobile() ? Window.FullScreen : Window.Windowed
+    onXChanged: if (!Emu.isMobile()) Emu.mobileX = x
+    onYChanged: if (!Emu.isMobile()) Emu.mobileY = y
+    width: Emu.isMobile() ? Screen.width : (Emu.mobileWidth != -1 ? Emu.mobileWidth : 320)
+    onWidthChanged: {
+        if (!Emu.isMobile()) Emu.mobileWidth = width;
+        updateSafeArea();
+    }
+    height: Emu.isMobile() ? Screen.height : (Emu.mobileHeight != -1 ? Emu.mobileHeight : 480)
+    onHeightChanged: {
+        if (!Emu.isMobile()) Emu.mobileHeight = height;
+        updateSafeArea();
+    }
 
     minimumWidth: 320
     minimumHeight: 480
+
+    Timer {
+        interval: 500
+        running: Emu.isMobile()
+        repeat: true
+        onTriggered: app.updateSafeArea()
+    }
 
     Component.onCompleted: {
         if(Emu.isMobile())
@@ -128,7 +155,12 @@ ApplicationWindow {
 
         focus: true
 
-        anchors.fill: parent
+        anchors {
+            fill: parent
+            topMargin: app.safeTop
+            leftMargin: app.safeLeft
+            rightMargin: app.safeRight
+        }
         orientation: Qt.Horizontal
         snapMode: ListView.SnapOneItem
         boundsBehavior: ListView.StopAtBounds
@@ -192,8 +224,8 @@ ApplicationWindow {
                 listView.pageX[index] = x;
             }
 
-            width: modelData === "MobileUIDrawer.qml" ? loader.item.implicitWidth : app.width
-            height: app.height
+            width: modelData === "MobileUIDrawer.qml" ? loader.item.implicitWidth : listView.width
+            height: listView.height
 
             Rectangle {
                 id: overlay
@@ -226,4 +258,3 @@ ApplicationWindow {
         }
     }
 }
-

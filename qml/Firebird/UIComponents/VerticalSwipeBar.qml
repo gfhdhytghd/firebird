@@ -5,7 +5,7 @@ Rectangle {
     signal clicked
 
     implicitWidth: label.contentHeight + 2 * 2
-    color: "transparent"
+    color: "black"
 
     FBLabel {
         id: label
@@ -13,6 +13,7 @@ Rectangle {
         anchors.centerIn: parent
         anchors.rightMargin: 2
         text: qsTr("Swipe here")
+        color: "white"
     }
 
     MouseArea {

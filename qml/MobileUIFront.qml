@@ -50,7 +50,7 @@ GridLayout {
         flickableDirection: Flickable.VerticalFlick
 
         contentWidth: parent.width
-        contentHeight: keypad.height*controls.width/keypad.width + iosmargin.height
+        contentHeight: keypad.height*controls.width/keypad.width
         clip: true
         pixelAligned: true
 
@@ -59,19 +59,6 @@ GridLayout {
             transform: Scale { origin.x: 0; origin.y: 0; xScale: controls.width/keypad.width; yScale: controls.width/keypad.width }
         }
 
-        Rectangle {
-            id: iosmargin
-            color: keypad.color
-
-            anchors {
-                left: parent.left
-                right: parent.right
-                bottom: parent.bottom
-            }
-
-            // This is needed to avoid opening the control center
-            height: Qt.platform.os === "ios" ? 20 : 0
-        }
     }
 
     Rectangle {
@@ -99,7 +86,7 @@ GridLayout {
         /* Keypad fills right side, as wide as needed */
         PropertyChanges {
             target: controls
-            Layout.minimumWidth: Math.floor(keypad.width/keypad.height * (mobileui.height - iosmargin.height))
+            Layout.minimumWidth: Math.floor(keypad.width/keypad.height * mobileui.height)
             Layout.maximumWidth: Layout.minimumWidth
             Layout.fillHeight: true
             Layout.columnSpan: 1
