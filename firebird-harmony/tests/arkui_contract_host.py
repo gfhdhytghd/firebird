@@ -51,8 +51,16 @@ assert "px2vp(this.topInsetPx)" in index_page
 assert "setSpeedLimit(2)" in index_page and "setSpeedLimit(0)" in index_page
 assert ".onClick(() => this.drawerOpen = true)" not in index_page
 assert "point.x - this.drawerOriginX > 48" in index_page
+assert "this.drawerTriggered = true" in index_page
+up_branch = re.search(r"event\.type === TouchType\.Up\)(.*?)else if \(event\.type === TouchType\.Cancel", index_page, re.S)
+move_branch = re.search(r"event\.type === TouchType\.Move.*?\{(.*?)else if \(event\.type === TouchType\.Up", index_page, re.S)
+assert up_branch is not None and "this.mobilePage = 1" in up_branch.group(1)
+assert move_branch is not None and "this.mobilePage = 1" not in move_branch.group(1)
 assert index_page.count("this.handleDrawerSwipe(event)") == 2
 assert ".width(18)" in index_page
+assert "Text('Swipe here')" in index_page and "rotate({ angle: -90 })" in index_page
+assert index_page.count(".width(120).height('100%').backgroundColor('#01000000')") == 2
+assert index_page.count("Row()\n            .width(120).height('100%')") == 1
 assert "this.mobilePage = 1" in index_page and "this.mobilePage = 2" in index_page
 for action in ("Start", "Reset", "Resume", "Save", "Configuration"):
     assert f"'{action}'" in mobile_drawer, f"missing mobile drawer action {action}"

@@ -30,6 +30,7 @@ struct Index {
   private physicalKeys: PhysicalKeyMap = new PhysicalKeyMap();
   private drawerPointer: number = -1;
   private drawerOriginX: number = 0;
+  private drawerTriggered: boolean = false;
   @State private speedLimitMode: number = 1;
 
   async aboutToAppear(): Promise<void> {
@@ -85,14 +86,22 @@ struct Index {
     if (event.type === TouchType.Down && this.drawerPointer < 0 && event.changedTouches.length > 0) {
       this.drawerPointer = event.changedTouches[0].id;
       this.drawerOriginX = event.changedTouches[0].x;
+      this.drawerTriggered = false;
     } else if (event.type === TouchType.Move && this.drawerPointer >= 0) {
       const point = this.drawerPoint(event);
       if (point !== undefined && point.x - this.drawerOriginX > 48) {
-        this.mobilePage = 1;
-        this.drawerPointer = -1;
+        this.drawerTriggered = true;
       }
-    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+    } else if (event.type === TouchType.Up) {
+      const openDrawer = this.drawerTriggered;
       this.drawerPointer = -1;
+      this.drawerTriggered = false;
+      if (openDrawer) {
+        this.mobilePage = 1;
+      }
+    } else if (event.type === TouchType.Cancel) {
+      this.drawerPointer = -1;
+      this.drawerTriggered = false;
     }
   }
 
@@ -112,13 +121,14 @@ struct Index {
   @Builder
   private drawerHandle() {
     Row() {
-      Text('S\nW\nI\nP\nE').fontColor(Color.White).fontSize(8).lineHeight(10)
-        .textAlign(TextAlign.Center)
+      Text('Swipe here').fontColor(Color.White).fontSize(8).maxLines(1)
+        .width(80).height(18).textAlign(TextAlign.Center).rotate({ angle: -90 })
     }
     .width(18)
     .height('100%')
     .backgroundColor(Color.Black)
     .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
   }
 
   @Builder
@@ -126,18 +136,22 @@ struct Index {
     Column() {
       Row() {
         this.drawerHandle()
-        XComponent({
-          id: 'firebirdLcd',
-          type: XComponentType.SURFACE,
-          libraryname: 'firebird_harmony'
-        })
-        .layoutWeight(1)
-        .height('100%')
-        .backgroundColor(Color.Black)
+        Stack({ alignContent: Alignment.Start }) {
+          XComponent({
+            id: 'firebirdLcd',
+            type: XComponentType.SURFACE,
+            libraryname: 'firebird_harmony'
+          })
+          .width('100%').height('100%').backgroundColor(Color.Black)
+          Row()
+            .width(120).height('100%').backgroundColor('#01000000')
+            .hitTestBehavior(HitTestMode.Block)
+            .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
+        }
+        .layoutWeight(1).height('100%')
       }
       .width('100%')
       .aspectRatio(4 / 3)
-      .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
 
       CalculatorKeypad({
         speed: this.status.speed,
@@ -157,11 +171,16 @@ struct Index {
         Row() {
           Row() {
             this.drawerHandle()
-            XComponent({ id: 'firebirdLcdLandscape', type: XComponentType.SURFACE,
-              libraryname: 'firebird_harmony' })
-              .layoutWeight(1).height('100%').backgroundColor(Color.Black)
+            Stack({ alignContent: Alignment.Start }) {
+              XComponent({ id: 'firebirdLcdLandscape', type: XComponentType.SURFACE,
+                libraryname: 'firebird_harmony' })
+                .width('100%').height('100%').backgroundColor(Color.Black)
+              Row()
+                .width(120).height('100%').backgroundColor('#01000000')
+                .hitTestBehavior(HitTestMode.Block)
+                .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
+            }.layoutWeight(1).height('100%')
           }.layoutWeight(1).height('100%')
-            .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
           CalculatorKeypad({
             speed: this.status.speed,
             speedLimitMode: this.speedLimitMode,
