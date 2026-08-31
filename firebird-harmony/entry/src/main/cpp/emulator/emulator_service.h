@@ -105,6 +105,7 @@ private:
     uint64_t frameCount_ = 0;
     uint64_t lastFpsFrameCount_ = 0;
     std::array<uint16_t, 320 * 240> lcdFrame_{};
+    bool displayBlanked_ = false;
     std::chrono::steady_clock::time_point lastFpsUpdate_{};
     void (*statusNotifier_)() = nullptr;
     std::chrono::steady_clock::time_point lastStatusNotification_{};

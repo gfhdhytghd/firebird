@@ -354,18 +354,34 @@ void EmulatorService::CoreTick()
         exiting = true;
     inputQueue_.swap(commands);
 
+    std::array<bool, 88> newlyPressed {};
+    std::array<bool, 88> deferredRelease {};
     for (const auto &command : commands) {
         if (command.kind == InputKind::Key) {
+            if (command.pressed) {
+                // A later DOWN in the same batch means the final state is held.
+                deferredRelease[command.keyId] = false;
+            }
             if (pressedKeys_[command.keyId] != command.pressed) {
+                // NAPI can enqueue DOWN and UP between two 100 Hz core ticks.
+                // Keep a newly pressed key down until the next tick so the
+                // emulated keypad/PMU always observes even a very quick tap.
+                if (!command.pressed && newlyPressed[command.keyId]) {
+                    deferredRelease[command.keyId] = true;
+                    continue;
+                }
                 pressedKeys_[command.keyId] = command.pressed;
                 keypad_set_key(command.keyId / KEYPAD_COLS, command.keyId % KEYPAD_COLS,
                                command.pressed);
+                newlyPressed[command.keyId] = command.pressed;
             }
         } else if (command.kind == InputKind::Touchpad) {
             touchpad_set_state(command.x, command.y, command.contact, command.down);
         } else if (command.kind == InputKind::SpeedLimit) {
             emu_set_speed_limit(command.speedLimit);
         } else {
+            newlyPressed.fill(false);
+            deferredRelease.fill(false);
             for (uint32_t key = 0; key < pressedKeys_.size(); ++key) {
                 if (pressedKeys_[key])
                     keypad_set_key(key / KEYPAD_COLS, key % KEYPAD_COLS, false);
@@ -373,6 +389,10 @@ void EmulatorService::CoreTick()
             }
             touchpad_set_state(0.5f, 0.5f, false, false);
         }
+    }
+    for (uint32_t key = 0; key < deferredRelease.size(); ++key) {
+        if (deferredRelease[key])
+            inputQueue_.push_back({InputKind::Key, key, false});
     }
 
     if (snapshotPending_) {
@@ -408,7 +428,19 @@ void EmulatorService::CoreTick()
         notifier();
         lock.lock();
     }
-    if (lastFrame_.time_since_epoch().count() == 0 || now - lastFrame_ >= std::chrono::milliseconds(33)) {
+    const bool sleeping = (cpu_events & EVENT_SLEEP) != 0;
+    if (sleeping && !displayBlanked_) {
+        displayBlanked_ = true;
+        lastFrame_ = now;
+        lock.unlock();
+        lcdFrame_.fill(0);
+        NativeRenderer::Instance().SubmitRgb565(lcdFrame_.data());
+        lock.lock();
+        ++frameCount_;
+    } else if (!sleeping &&
+               (lastFrame_.time_since_epoch().count() == 0 ||
+                now - lastFrame_ >= std::chrono::milliseconds(33))) {
+        displayBlanked_ = false;
         lastFrame_ = now;
         lock.unlock();
         lcd_cx_draw_frame(lcdFrame_.data());
