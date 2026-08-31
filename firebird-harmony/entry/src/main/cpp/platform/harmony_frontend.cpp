@@ -53,13 +53,15 @@ void gui_status_printf(const char *format, ...)
 }
 
 void gui_perror(const char *message) { gui_debug_printf("%s: %s", message, std::strerror(errno)); }
-void gui_debugger_entered_or_left(bool) {}
-void gui_debugger_request_input(debug_input_cb callback) { if (callback) callback(""); }
+void gui_debugger_entered_or_left(bool entered) { EmulatorService::Instance().SetDebuggerActive(entered); }
+void gui_debugger_request_input(debug_input_cb callback) {
+    EmulatorService::Instance().SetDebuggerInputCallback(callback);
+}
 void gui_putchar(char) {}
 int gui_getchar() { return -1; }
 void gui_set_busy(bool) {}
 void gui_show_speed(double speed) { EmulatorService::Instance().SetSpeed(speed); }
-void gui_usblink_changed(bool) {}
+void gui_usblink_changed(bool connected) { EmulatorService::Instance().SetUsbLinkConnected(connected); }
 void throttle_timer_off() {}
 void throttle_timer_on() {}
 void throttle_timer_wait(unsigned int usec) { std::this_thread::sleep_for(std::chrono::microseconds(usec)); }

@@ -14,7 +14,16 @@
 #include "../../../../../../core/flash.h"
 #include "../../../../../../core/keypad.h"
 #include "../../../../../../core/lcd.h"
+#include "../../../../../../core/debug.h"
 #include "../../../../../../core/translate.h"
+#include "../../../../../../core/usblink_queue.h"
+
+namespace {
+void TransferProgress(int progress, void *opaque)
+{
+    static_cast<EmulatorService *>(opaque)->SetTransferProgress(progress);
+}
+}
 
 EmulatorService &EmulatorService::Instance()
 {
@@ -204,6 +213,81 @@ void EmulatorService::Resume()
     if (notifier) notifier();
 }
 
+void EmulatorService::QueueFileTransfer(std::string localPath, std::string remotePath)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        InputCommand command;
+        command.kind = InputKind::FileTransfer;
+        command.localPath = std::move(localPath);
+        command.remotePath = std::move(remotePath);
+        inputQueue_.push_back(std::move(command));
+        status_.transferProgress = 0;
+    }
+    condition_.notify_all();
+}
+
+void EmulatorService::QueueExitPressToTest()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        InputCommand command;
+        command.kind = InputKind::ExitPressToTest;
+        inputQueue_.push_back(std::move(command));
+        status_.transferProgress = 0;
+    }
+    condition_.notify_all();
+}
+
+bool EmulatorService::ConfigureDebugger(uint32_t gdbPort, uint32_t remotePort,
+                                        bool debugOnStartValue, bool debugOnWarnValue,
+                                        bool printOnWarnValue, std::string &error)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (thread_.joinable() && status_.state != "stopped" && status_.state != "error") {
+        error = "Stop the emulator before changing debugger listeners";
+        return false;
+    }
+    gdbPort_ = gdbPort;
+    remoteDebugPort_ = remotePort;
+    debugOnStart_ = debugOnStartValue;
+    debugOnWarn_ = debugOnWarnValue;
+    printOnWarn_ = printOnWarnValue;
+    return true;
+}
+
+void EmulatorService::QueueEnterDebugger()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        InputCommand command;
+        command.kind = InputKind::EnterDebugger;
+        inputQueue_.push_back(std::move(command));
+    }
+    condition_.notify_all();
+}
+
+void EmulatorService::QueueDebuggerCommand(std::string commandText)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        InputCommand command;
+        command.kind = InputKind::DebugCommand;
+        command.localPath = std::move(commandText);
+        inputQueue_.push_back(std::move(command));
+    }
+    condition_.notify_all();
+}
+
+std::string EmulatorService::DebugLog() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::string result;
+    for (const auto &line : debugLog_)
+        result += line;
+    return result;
+}
+
 bool EmulatorService::Stop(std::string &error)
 {
     {
@@ -301,24 +385,31 @@ void EmulatorService::QueueKey(uint32_t keyId, bool pressed)
     if (keyId >= pressedKeys_.size())
         return;
     std::lock_guard<std::mutex> lock(mutex_);
-    inputQueue_.push_back({InputKind::Key, keyId, pressed});
+    InputCommand command;
+    command.kind = InputKind::Key;
+    command.keyId = keyId;
+    command.pressed = pressed;
+    inputQueue_.push_back(std::move(command));
     condition_.notify_all();
 }
 
 void EmulatorService::QueueTouchpad(float x, float y, bool contact, bool down)
 {
-    InputCommand command {InputKind::Touchpad};
+    InputCommand command;
+    command.kind = InputKind::Touchpad;
     command.x = std::clamp(x, 0.0f, 1.0f);
     command.y = std::clamp(y, 0.0f, 1.0f);
     command.contact = contact;
     command.down = down;
     std::lock_guard<std::mutex> lock(mutex_);
-    inputQueue_.push_back(command);
+    inputQueue_.push_back(std::move(command));
+    condition_.notify_all();
 }
 
 void EmulatorService::QueueSpeedLimit(double limit)
 {
-    InputCommand command {InputKind::SpeedLimit};
+    InputCommand command;
+    command.kind = InputKind::SpeedLimit;
     command.speedLimit = limit == 2.0 ? 2.0 : (limit <= 0.0 ? 0.0 : 1.0);
     std::lock_guard<std::mutex> lock(mutex_);
     speedLimit_ = command.speedLimit;
@@ -329,7 +420,10 @@ void EmulatorService::QueueSpeedLimit(double limit)
 void EmulatorService::ReleaseAllInputs()
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    inputQueue_.push_back({InputKind::ReleaseAll});
+    InputCommand command;
+    command.kind = InputKind::ReleaseAll;
+    inputQueue_.push_back(std::move(command));
+    condition_.notify_all();
 }
 
 EmulatorStatus EmulatorService::Status() const
@@ -379,6 +473,26 @@ void EmulatorService::CoreTick()
             touchpad_set_state(command.x, command.y, command.contact, command.down);
         } else if (command.kind == InputKind::SpeedLimit) {
             emu_set_speed_limit(command.speedLimit);
+        } else if (command.kind == InputKind::FileTransfer) {
+            usblink_queue_put_file(command.localPath, command.remotePath, TransferProgress, this);
+        } else if (command.kind == InputKind::ExitPressToTest) {
+            usblink_queue_new_dir("/Press-to-Test", nullptr, nullptr);
+            usblink_queue_put_file(std::string(), "/Press-to-Test/Exit Test Mode.tns",
+                                   TransferProgress, this);
+        } else if (command.kind == InputKind::EnterDebugger) {
+            lock.unlock();
+            debugger(DBG_USER, 0);
+            lock.lock();
+        } else if (command.kind == InputKind::DebugCommand) {
+            lastDebuggerCommand_ = command.localPath;
+            if (debugInputCallback_) {
+                const debug_input_cb callback = debugInputCallback_;
+                debugInputCallback_ = nullptr;
+                status_.debuggerWaitingForInput = false;
+                lock.unlock();
+                callback(lastDebuggerCommand_.c_str());
+                lock.lock();
+            }
         } else {
             newlyPressed.fill(false);
             deferredRelease.fill(false);
@@ -391,8 +505,13 @@ void EmulatorService::CoreTick()
         }
     }
     for (uint32_t key = 0; key < deferredRelease.size(); ++key) {
-        if (deferredRelease[key])
-            inputQueue_.push_back({InputKind::Key, key, false});
+        if (deferredRelease[key]) {
+            InputCommand release;
+            release.kind = InputKind::Key;
+            release.keyId = key;
+            release.pressed = false;
+            inputQueue_.push_back(std::move(release));
+        }
     }
 
     if (snapshotPending_) {
@@ -459,8 +578,60 @@ void EmulatorService::SetSpeed(double speed)
 void EmulatorService::AppendLog(const std::string &message)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    debugLog_.push_back(message);
+    while (debugLog_.size() > 240)
+        debugLog_.pop_front();
     if (message.find("Error") != std::string::npos)
         status_.error = message;
+}
+
+void EmulatorService::SetDebuggerActive(bool active)
+{
+    void (*notifier)() = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        status_.debuggerActive = active;
+        if (!active) {
+            status_.debuggerWaitingForInput = false;
+            debugInputCallback_ = nullptr;
+        }
+        notifier = statusNotifier_;
+    }
+    if (notifier) notifier();
+}
+
+void EmulatorService::SetDebuggerInputCallback(debug_input_cb callback)
+{
+    void (*notifier)() = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        debugInputCallback_ = callback;
+        status_.debuggerWaitingForInput = callback != nullptr;
+        notifier = statusNotifier_;
+    }
+    if (notifier) notifier();
+}
+
+void EmulatorService::SetUsbLinkConnected(bool connected)
+{
+    void (*notifier)() = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        status_.usbLinkConnected = connected;
+        notifier = statusNotifier_;
+    }
+    if (notifier) notifier();
+}
+
+void EmulatorService::SetTransferProgress(int progress)
+{
+    void (*notifier)() = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        status_.transferProgress = progress;
+        notifier = statusNotifier_;
+    }
+    if (notifier) notifier();
 }
 
 void EmulatorService::ThreadMain(std::string snapshotPath)
@@ -469,12 +640,19 @@ void EmulatorService::ThreadMain(std::string snapshotPath)
     std::string flash;
     bool jit = true;
     double speedLimit = 1.0;
+    uint32_t gdbPort = 0;
+    uint32_t remoteDebugPort = 0;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         boot = bootPath_;
         flash = flashPath_;
         jit = jitEnabled_;
         speedLimit = speedLimit_;
+        gdbPort = gdbPort_;
+        remoteDebugPort = remoteDebugPort_;
+        debug_on_start = debugOnStart_;
+        debug_on_warn = debugOnWarn_;
+        print_on_warn = printOnWarn_;
     }
     path_boot1 = boot;
     path_flash = flash;
@@ -484,7 +662,8 @@ void EmulatorService::ThreadMain(std::string snapshotPath)
     jit_translated_blocks = 0;
     jit_execution_entries = 0;
 
-    const bool started = emu_start(0, 0, snapshotPath.empty() ? nullptr : snapshotPath.c_str());
+    const bool started = emu_start(gdbPort, remoteDebugPort,
+                                   snapshotPath.empty() ? nullptr : snapshotPath.c_str());
     constexpr const char *temporarySuffix = ".core.resume.tmp";
     if (snapshotPath.size() >= std::strlen(temporarySuffix) &&
         snapshotPath.compare(snapshotPath.size() - std::strlen(temporarySuffix),

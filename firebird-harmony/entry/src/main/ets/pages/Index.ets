@@ -9,7 +9,9 @@ import { SettingsDrawer } from '../components/SettingsDrawer';
 const EMPTY_STATUS: EmulatorStatus = {
   state: 'stopped', error: '', speed: 0, fps: 0,
   jitRequested: true, jitProbePassed: false, jitInitialized: false,
-  translatedBlocks: 0, jitExecutionEntries: 0, product: 0, model: ''
+  translatedBlocks: 0, jitExecutionEntries: 0, product: 0, model: '',
+  usbLinkConnected: false, transferProgress: -1,
+  debuggerActive: false, debuggerWaitingForInput: false
 };
 
 @Entry
@@ -31,11 +33,21 @@ struct Index {
   async aboutToAppear(): Promise<void> {
     this.fileStore.updateContext(this.getUIContext().getHostContext() as common.UIAbilityContext);
     firebird.subscribeStatus((status: EmulatorStatus): void => { this.status = status; });
+    await this.fileStore.loadProfiles();
     await this.fileStore.installBundledImagesIfPresent();
     const configuration = await this.fileStore.loadConfiguration();
     this.jitEnabled = configuration.jitEnabled;
+    const debuggerSettings = await this.fileStore.loadDebuggerSettings();
+    await firebird.configureDebugger({
+      gdbPort: debuggerSettings.gdbEnabled ? debuggerSettings.gdbPort : 0,
+      remotePort: debuggerSettings.remoteEnabled ? debuggerSettings.remotePort : 0,
+      debugOnStart: debuggerSettings.debugOnStart,
+      debugOnWarn: debuggerSettings.debugOnWarn,
+      printOnWarn: debuggerSettings.printOnWarn
+    });
     if (this.jitEnabled) await firebird.probeJit();
     AppStorage.setOrCreate<string>('firebirdAutosavePath', this.fileStore.autosavePath());
+    AppStorage.set<string>('firebirdAutosavePath', this.fileStore.autosavePath());
     try { await this.configureFiles(); } catch (_) {}
   }
 
@@ -161,7 +173,8 @@ struct Index {
             status: $status,
             jitEnabled: $jitEnabled,
             fileStore: this.fileStore,
-            onFilesChanged: async () => { await this.configureFiles(); }
+            onFilesChanged: async () => { await this.configureFiles(); },
+            onClose: () => { this.drawerOpen = false; }
           }).width('84%')
           Blank()
             .backgroundColor('#66000000')

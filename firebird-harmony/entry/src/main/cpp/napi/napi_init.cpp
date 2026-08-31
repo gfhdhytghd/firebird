@@ -361,6 +361,89 @@ napi_value SetSpeedLimit(napi_env env, napi_callback_info info)
     return Undefined(env);
 }
 
+napi_value SendFile(napi_env env, napi_callback_info info)
+{
+    size_t argc = 2;
+    napi_value args[2];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc != 2) {
+        napi_throw_type_error(env, nullptr, "sendFile requires a sandbox file and calculator path");
+        return Undefined(env);
+    }
+    const std::string local = GetString(env, args[0]);
+    const std::string remote = GetString(env, args[1]);
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(local, error)) {
+        napi_throw_error(env, nullptr, "Transfer source is not a readable sandbox file");
+        return Undefined(env);
+    }
+    if (remote.empty() || remote.front() != '/' || remote.find("..") != std::string::npos) {
+        napi_throw_error(env, nullptr, "Calculator destination must be an absolute path without '..'");
+        return Undefined(env);
+    }
+    EmulatorService::Instance().QueueFileTransfer(local, remote);
+    return Undefined(env);
+}
+
+napi_value ExitPressToTest(napi_env env, napi_callback_info)
+{
+    EmulatorService::Instance().QueueExitPressToTest();
+    return Undefined(env);
+}
+
+napi_value ConfigureDebugger(napi_env env, napi_callback_info info)
+{
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc != 1)
+        return Rejected(env, "configureDebugger requires one configuration object");
+    napi_value gdbPortValue, remotePortValue, startValue, warnValue, printValue;
+    napi_get_named_property(env, args[0], "gdbPort", &gdbPortValue);
+    napi_get_named_property(env, args[0], "remotePort", &remotePortValue);
+    napi_get_named_property(env, args[0], "debugOnStart", &startValue);
+    napi_get_named_property(env, args[0], "debugOnWarn", &warnValue);
+    napi_get_named_property(env, args[0], "printOnWarn", &printValue);
+    uint32_t gdbPort = 0, remotePort = 0;
+    bool debugOnStartValue = false, debugOnWarnValue = false, printOnWarnValue = true;
+    napi_get_value_uint32(env, gdbPortValue, &gdbPort);
+    napi_get_value_uint32(env, remotePortValue, &remotePort);
+    napi_get_value_bool(env, startValue, &debugOnStartValue);
+    napi_get_value_bool(env, warnValue, &debugOnWarnValue);
+    napi_get_value_bool(env, printValue, &printOnWarnValue);
+    if (gdbPort > 65535 || remotePort > 65535)
+        return Rejected(env, "Debugger ports must be 0 (disabled) or 1-65535");
+    std::string error;
+    if (!EmulatorService::Instance().ConfigureDebugger(gdbPort, remotePort, debugOnStartValue,
+                                                        debugOnWarnValue, printOnWarnValue, error))
+        return Rejected(env, error);
+    return Resolved(env, Undefined(env));
+}
+
+napi_value EnterDebugger(napi_env env, napi_callback_info)
+{
+    EmulatorService::Instance().QueueEnterDebugger();
+    return Undefined(env);
+}
+
+napi_value SendDebuggerCommand(napi_env env, napi_callback_info info)
+{
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    if (argc != 1) {
+        napi_throw_type_error(env, nullptr, "sendDebuggerCommand requires one command");
+        return Undefined(env);
+    }
+    EmulatorService::Instance().QueueDebuggerCommand(GetString(env, args[0]));
+    return Undefined(env);
+}
+
+napi_value GetDebugLog(napi_env env, napi_callback_info)
+{
+    return String(env, EmulatorService::Instance().DebugLog());
+}
+
 napi_value GetStatus(napi_env env, napi_callback_info)
 {
     EmulatorStatus status = EmulatorService::Instance().Status();
@@ -377,6 +460,10 @@ napi_value GetStatus(napi_env env, napi_callback_info)
     Set(env, object, "jitExecutionEntries", Number(env, status.jitExecutionEntries));
     Set(env, object, "product", Number(env, status.product));
     Set(env, object, "model", String(env, status.model));
+    Set(env, object, "usbLinkConnected", Boolean(env, status.usbLinkConnected));
+    Set(env, object, "transferProgress", Number(env, status.transferProgress));
+    Set(env, object, "debuggerActive", Boolean(env, status.debuggerActive));
+    Set(env, object, "debuggerWaitingForInput", Boolean(env, status.debuggerWaitingForInput));
     return object;
 }
 
@@ -441,6 +528,12 @@ napi_value Init(napi_env env, napi_value exports)
         {"setTouchpadState", nullptr, SetTouchpadState, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"releaseAllInputs", nullptr, ReleaseAllInputs, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setSpeedLimit", nullptr, SetSpeedLimit, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"sendFile", nullptr, SendFile, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"exitPressToTest", nullptr, ExitPressToTest, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"configureDebugger", nullptr, ConfigureDebugger, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"enterDebugger", nullptr, EnterDebugger, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"sendDebuggerCommand", nullptr, SendDebuggerCommand, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"getDebugLog", nullptr, GetDebugLog, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"getStatus", nullptr, GetStatus, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"subscribeStatus", nullptr, SubscribeStatus, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

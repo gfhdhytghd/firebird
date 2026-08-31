@@ -9,6 +9,10 @@ export interface ValidationResult {
   valid: boolean;
   product: number;
   model: string;
+  usbLinkConnected: boolean;
+  transferProgress: number;
+  debuggerActive: boolean;
+  debuggerWaitingForInput: boolean;
   error: string;
 }
 
@@ -40,6 +44,14 @@ export interface SnapshotInfo {
   error: string;
 }
 
+export interface DebuggerConfiguration {
+  gdbPort: number;
+  remotePort: number;
+  debugOnStart: boolean;
+  debugOnWarn: boolean;
+  printOnWarn: boolean;
+}
+
 export const probeJit: () => Promise<JitProbeResult>;
 export const validateFiles: (bootPath: string, flashPath: string) => Promise<ValidationResult>;
 export const configure: (configuration: EmulatorConfiguration) => Promise<ValidationResult>;
@@ -55,5 +67,11 @@ export const setKeyState: (keyId: number, pressed: boolean) => void;
 export const setTouchpadState: (x: number, y: number, contact: boolean, down: boolean) => void;
 export const releaseAllInputs: () => void;
 export const setSpeedLimit: (limit: 1 | 2 | 0) => void;
+export const sendFile: (sandboxPath: string, calculatorPath: string) => void;
+export const exitPressToTest: () => void;
+export const configureDebugger: (configuration: DebuggerConfiguration) => Promise<void>;
+export const enterDebugger: () => void;
+export const sendDebuggerCommand: (command: string) => void;
+export const getDebugLog: () => string;
 export const getStatus: () => EmulatorStatus;
 export const subscribeStatus: (callback: (status: EmulatorStatus) => void) => void;

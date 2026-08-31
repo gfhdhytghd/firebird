@@ -9,9 +9,31 @@ export interface StoredConfiguration {
   jitEnabled: boolean;
 }
 
+export interface FirebirdProfile {
+  id: string;
+  name: string;
+}
+
+export interface TransferFile {
+  path: string;
+  name: string;
+}
+
+export interface DebuggerSettings {
+  gdbEnabled: boolean;
+  gdbPort: number;
+  remoteEnabled: boolean;
+  remotePort: number;
+  debugOnStart: boolean;
+  debugOnWarn: boolean;
+  printOnWarn: boolean;
+}
+
 export class FileStore {
   private context: common.UIAbilityContext;
   private root: string;
+  private activeProfileId: string = 'default';
+  private profiles: Array<FirebirdProfile> = [{ id: 'default', name: 'Default' }];
 
   constructor(context: common.UIAbilityContext) {
     this.context = context;
@@ -25,12 +47,87 @@ export class FileStore {
     this.ensureDirectories();
   }
 
-  bootPath(): string { return `${this.root}/images/boot1.rom`; }
-  flashPath(): string { return `${this.root}/images/flash.img`; }
-  autosavePath(): string { return `${this.root}/snapshots/autosave.snapshot`; }
+  bootPath(): string { return `${this.profileImageDirectory()}/boot1.rom`; }
+  flashPath(): string { return `${this.profileImageDirectory()}/flash.img`; }
+  autosavePath(): string {
+    return this.activeProfileId === 'default' ? `${this.root}/snapshots/autosave.snapshot` :
+      `${this.root}/snapshots/autosave-${this.activeProfileId}.snapshot`;
+  }
   snapshotDirectory(): string { return `${this.root}/snapshots`; }
 
+  getProfiles(): Array<FirebirdProfile> { return this.profiles.slice(); }
+  getActiveProfileId(): string { return this.activeProfileId; }
+  getActiveProfileName(): string {
+    const current = this.profiles.find((profile: FirebirdProfile): boolean =>
+      profile.id === this.activeProfileId);
+    return current === undefined ? 'Default' : current.name;
+  }
+
+  async loadProfiles(): Promise<void> {
+    const store = await preferences.getPreferences(this.context, 'firebird_settings');
+    const encoded = await store.get('profileList', 'default:Default') as string;
+    const loaded: Array<FirebirdProfile> = [];
+    encoded.split('|').forEach((entry: string): void => {
+      const separator = entry.indexOf(':');
+      if (separator <= 0) return;
+      const id = entry.substring(0, separator).replace(/[^A-Za-z0-9_-]/g, '');
+      const name = decodeURIComponent(entry.substring(separator + 1));
+      if (id.length > 0 && name.length > 0)
+        loaded.push({ id: id, name: name });
+    });
+    if (!loaded.some((profile: FirebirdProfile): boolean => profile.id === 'default'))
+      loaded.unshift({ id: 'default', name: 'Default' });
+    this.profiles = loaded;
+    const requested = await store.get('activeProfile', 'default') as string;
+    this.activeProfileId = loaded.some((profile: FirebirdProfile): boolean =>
+      profile.id === requested) ? requested : 'default';
+    this.ensureDirectories();
+  }
+
+  async createProfile(name: string): Promise<FirebirdProfile> {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) throw new Error('Profile name cannot be empty');
+    const profile: FirebirdProfile = {
+      id: `profile-${Date.now()}`,
+      name: trimmed
+    };
+    this.profiles.push(profile);
+    this.activeProfileId = profile.id;
+    this.ensureDirectories();
+    await this.saveProfiles();
+    return profile;
+  }
+
+  async selectProfile(id: string): Promise<void> {
+    if (!this.profiles.some((profile: FirebirdProfile): boolean => profile.id === id))
+      throw new Error('Profile no longer exists');
+    this.activeProfileId = id;
+    this.ensureDirectories();
+    await this.saveProfiles();
+  }
+
+  async renameActiveProfile(name: string): Promise<void> {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) throw new Error('Profile name cannot be empty');
+    const current = this.profiles.find((profile: FirebirdProfile): boolean =>
+      profile.id === this.activeProfileId);
+    if (current === undefined) throw new Error('Active profile no longer exists');
+    current.name = trimmed;
+    await this.saveProfiles();
+  }
+
+  async deleteActiveProfile(): Promise<void> {
+    if (this.activeProfileId === 'default') throw new Error('The default profile cannot be deleted');
+    const removed = this.activeProfileId;
+    this.profiles = this.profiles.filter((profile: FirebirdProfile): boolean => profile.id !== removed);
+    this.activeProfileId = 'default';
+    // Image files are deliberately retained. Removing a profile must not silently
+    // destroy a user's 132 MiB flash image or snapshots.
+    await this.saveProfiles();
+  }
+
   async installBundledImagesIfPresent(): Promise<void> {
+    if (this.activeProfileId !== 'default') return;
     if (!this.bootReady())
       await this.copyBundledRawFile('firebird.boot1.rom', this.bootPath(), 0x80000);
     if (!this.flashReady())
@@ -71,10 +168,32 @@ export class FileStore {
     return this.importDocument(destination);
   }
 
+  async importTransferFile(): Promise<TransferFile> {
+    const documentPicker = new picker.DocumentViewPicker(this.context);
+    const selected = await documentPicker.select();
+    if (selected.length !== 1) throw new Error('No file selected');
+    const uri = selected[0];
+    const tail = uri.substring(uri.lastIndexOf('/') + 1).split('?')[0];
+    const decoded = decodeURIComponent(tail);
+    const safeName = decoded.replace(/[^A-Za-z0-9._ -]/g, '_');
+    const name = safeName.length > 0 ? safeName : `transfer-${Date.now()}.tns`;
+    const directory = `${this.root}/transfers`;
+    if (!this.exists(directory)) fs.mkdirSync(directory, true);
+    const destination = `${directory}/${Date.now()}-${name}`;
+    const source = fs.openSync(uri, fs.OpenMode.READ_ONLY);
+    try {
+      fs.copyFileSync(source.fd, destination);
+    } finally {
+      fs.closeSync(source);
+    }
+    return { path: destination, name: name };
+  }
+
   listSnapshots(): Array<string> {
     try {
       return fs.listFileSync(this.snapshotDirectory())
-        .filter((name: string) => name.endsWith('.snapshot') && name !== 'autosave.snapshot')
+        .filter((name: string) => name.endsWith('.snapshot') &&
+          name !== 'autosave.snapshot' && !name.startsWith('autosave-'))
         .sort();
     } catch (_) {
       return [];
@@ -128,16 +247,57 @@ export class FileStore {
 
   async saveConfiguration(configuration: StoredConfiguration): Promise<void> {
     const store = await preferences.getPreferences(this.context, 'firebird_settings');
-    await store.put('bootId', 'images/boot1.rom');
-    await store.put('flashId', 'images/flash.img');
+    const imageId = this.activeProfileId === 'default' ? 'images' : `profiles/${this.activeProfileId}`;
+    await store.put('bootId', `${imageId}/boot1.rom`);
+    await store.put('flashId', `${imageId}/flash.img`);
     await store.put('jitEnabled', configuration.jitEnabled);
     await store.flush();
   }
 
+  async loadDebuggerSettings(): Promise<DebuggerSettings> {
+    const store = await preferences.getPreferences(this.context, 'firebird_settings');
+    return {
+      gdbEnabled: await store.get('gdbEnabled', false) as boolean,
+      gdbPort: await store.get('gdbPort', 3333) as number,
+      remoteEnabled: await store.get('remoteDebugEnabled', false) as boolean,
+      remotePort: await store.get('remoteDebugPort', 3334) as number,
+      debugOnStart: await store.get('debugOnStart', false) as boolean,
+      debugOnWarn: await store.get('debugOnWarn', false) as boolean,
+      printOnWarn: await store.get('printOnWarn', true) as boolean
+    };
+  }
+
+  async saveDebuggerSettings(settings: DebuggerSettings): Promise<void> {
+    const store = await preferences.getPreferences(this.context, 'firebird_settings');
+    await store.put('gdbEnabled', settings.gdbEnabled);
+    await store.put('gdbPort', settings.gdbPort);
+    await store.put('remoteDebugEnabled', settings.remoteEnabled);
+    await store.put('remoteDebugPort', settings.remotePort);
+    await store.put('debugOnStart', settings.debugOnStart);
+    await store.put('debugOnWarn', settings.debugOnWarn);
+    await store.put('printOnWarn', settings.printOnWarn);
+    await store.flush();
+  }
+
   private ensureDirectories(): void {
-    for (const directory of [this.root, `${this.root}/images`, this.snapshotDirectory()]) {
+    for (const directory of [this.root, `${this.root}/images`, `${this.root}/profiles`,
+      this.profileImageDirectory(), this.snapshotDirectory()]) {
       if (!this.exists(directory)) fs.mkdirSync(directory, true);
     }
+  }
+
+  private profileImageDirectory(): string {
+    return this.activeProfileId === 'default' ? `${this.root}/images` :
+      `${this.root}/profiles/${this.activeProfileId}`;
+  }
+
+  private async saveProfiles(): Promise<void> {
+    const store = await preferences.getPreferences(this.context, 'firebird_settings');
+    const encoded = this.profiles.map((profile: FirebirdProfile): string =>
+      `${profile.id}:${encodeURIComponent(profile.name)}`).join('|');
+    await store.put('profileList', encoded);
+    await store.put('activeProfile', this.activeProfileId);
+    await store.flush();
   }
 
   private async copyBundledRawFile(resourceName: string, destination: string,
