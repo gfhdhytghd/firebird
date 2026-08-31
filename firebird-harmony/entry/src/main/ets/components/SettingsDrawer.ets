@@ -96,7 +96,8 @@ export struct SettingsDrawer {
         Text(`JIT probe: ${this.status.jitProbePassed ? 'passed' : 'not passed'}`).fontColor(Color.White)
         Text(`JIT: ${this.status.jitExecutionEntries > 0 ? 'running' :
           (this.status.jitInitialized ? 'initialized' : 'not running')}`).fontColor(Color.White)
-        Text(`JIT blocks: ${this.status.jitExecutionEntries}`).fontColor(Color.White)
+        Text(`Translated blocks: ${this.status.translatedBlocks}`).fontColor(Color.White)
+        Text(`JIT entries: ${this.status.jitExecutionEntries}`).fontColor(Color.White)
 
         Row() {
           Text('Enable AArch64 JIT').fontColor(Color.White).layoutWeight(1)

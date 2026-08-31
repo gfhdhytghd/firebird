@@ -32,6 +32,7 @@ uint64_t jit_translated_blocks = 0;
 uint64_t jit_execution_entries = 0;
 uint32_t product = 0x0E0, features = 0, asic_user_flags = 0;
 bool turbo_mode = false;
+static double throttle_speed_limit = 1.0;
 
 bool exiting, debug_on_start, debug_on_warn, print_on_warn;
 BootOrder boot_order = ORDER_DEFAULT;
@@ -116,6 +117,14 @@ static auto last_throttle = std::chrono::steady_clock::now();
 // Calculate speed by summing up the elapsed virtual and real time and taking the ratio
 static std::chrono::microseconds real_time_elapsed_sum, virt_time_elapsed_sum;
 
+void emu_set_speed_limit(double limit)
+{
+    turbo_mode = limit <= 0.0;
+    throttle_speed_limit = limit > 0.0 ? limit : 1.0;
+    last_throttle = std::chrono::steady_clock::now();
+    real_time_elapsed_sum = virt_time_elapsed_sum = {};
+}
+
 void throttle_interval_event(int index)
 {
     /* Throttle interval (defined arbitrarily as 100Hz) - used for
@@ -139,7 +148,9 @@ void throttle_interval_event(int index)
 
     // Compute how much time elapsed since last_throttle
     auto real_interval = std::chrono::steady_clock::now() - last_throttle;
-    auto real_time_diff = virt_throttle_interval - real_interval;
+    const auto target_real_interval =
+        std::chrono::duration<double>(virt_throttle_interval) / throttle_speed_limit;
+    auto real_time_diff = target_real_interval - real_interval;
     auto real_time_left_us = std::chrono::duration_cast<std::chrono::microseconds>(real_time_diff).count();
     // If less than the virtual throttle interval elapsed, wait
     if(real_time_left_us > 0 && !turbo_mode)

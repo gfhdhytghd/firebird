@@ -54,5 +54,6 @@ export const inspectSnapshot: (path: string) => Promise<SnapshotInfo>;
 export const setKeyState: (keyId: number, pressed: boolean) => void;
 export const setTouchpadState: (x: number, y: number, contact: boolean, down: boolean) => void;
 export const releaseAllInputs: () => void;
+export const setSpeedLimit: (limit: 1 | 2 | 0) => void;
 export const getStatus: () => EmulatorStatus;
 export const subscribeStatus: (callback: (status: EmulatorStatus) => void) => void;

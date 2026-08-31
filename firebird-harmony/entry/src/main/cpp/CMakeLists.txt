@@ -61,6 +61,7 @@ target_compile_definitions(firebird_harmony PRIVATE
     FB_VERSION=1.6
 )
 target_compile_options(firebird_harmony PRIVATE
+    -O2
     -Wall -Wextra -Wno-unused-parameter -Wa,--noexecstack
     "-ffile-prefix-map=${FIREBIRD_ROOT}=."
     "-fdebug-prefix-map=${FIREBIRD_ROOT}=."

@@ -49,6 +49,7 @@ public:
     bool ValidateSnapshotForCurrentFiles(const std::string &path, std::string &error) const;
     void QueueKey(uint32_t keyId, bool pressed);
     void QueueTouchpad(float x, float y, bool contact, bool down);
+    void QueueSpeedLimit(double limit);
     void ReleaseAllInputs();
     EmulatorStatus Status() const;
     void SetStatusNotifier(void (*notifier)());
@@ -63,7 +64,7 @@ private:
     EmulatorService(const EmulatorService &) = delete;
     EmulatorService &operator=(const EmulatorService &) = delete;
 
-    enum class InputKind { Key, Touchpad, ReleaseAll };
+    enum class InputKind { Key, Touchpad, SpeedLimit, ReleaseAll };
     struct InputCommand {
         InputKind kind;
         uint32_t keyId = 0;
@@ -72,6 +73,7 @@ private:
         float y = 0;
         bool contact = false;
         bool down = false;
+        double speedLimit = 1.0;
     };
 
     void ThreadMain(std::string snapshotPath);
@@ -83,6 +85,7 @@ private:
     std::string bootPath_;
     std::string flashPath_;
     bool jitEnabled_ = true;
+    double speedLimit_ = 1.0;
     bool configured_ = false;
     bool paused_ = false;
     bool stopRequested_ = false;
@@ -101,6 +104,7 @@ private:
     std::chrono::steady_clock::time_point lastFrame_{};
     uint64_t frameCount_ = 0;
     uint64_t lastFpsFrameCount_ = 0;
+    std::array<uint16_t, 320 * 240> lcdFrame_{};
     std::chrono::steady_clock::time_point lastFpsUpdate_{};
     void (*statusNotifier_)() = nullptr;
     std::chrono::steady_clock::time_point lastStatusNotification_{};

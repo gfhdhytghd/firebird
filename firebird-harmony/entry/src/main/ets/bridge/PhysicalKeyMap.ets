@@ -60,8 +60,15 @@ export class PhysicalKeyMap {
 
   private submitArrowState(): void {
     const active = Array.from(this.arrows.values()).pop();
-    if (active === undefined) firebird.setTouchpadState(0.5, 0.5, false, false);
-    else if (active === KeyCode.KEYCODE_DPAD_UP) firebird.setTouchpadState(0.5, 0.0, true, true);
+    if (active === undefined) {
+      firebird.setTouchpadState(0.5, 0.5, false, false);
+      return;
+    }
+
+    // touchpad_set_state only creates relative motion after contact already exists.
+    // Queue a center contact first so a physical arrow press produces a real move.
+    firebird.setTouchpadState(0.5, 0.5, true, false);
+    if (active === KeyCode.KEYCODE_DPAD_UP) firebird.setTouchpadState(0.5, 0.0, true, true);
     else if (active === KeyCode.KEYCODE_DPAD_DOWN) firebird.setTouchpadState(0.5, 1.0, true, true);
     else if (active === KeyCode.KEYCODE_DPAD_LEFT) firebird.setTouchpadState(0.0, 0.5, true, true);
     else firebird.setTouchpadState(1.0, 0.5, true, true);

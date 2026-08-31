@@ -350,6 +350,17 @@ napi_value ReleaseAllInputs(napi_env env, napi_callback_info)
     return Undefined(env);
 }
 
+napi_value SetSpeedLimit(napi_env env, napi_callback_info info)
+{
+    size_t argc = 1;
+    napi_value args[1];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    double limit = 1.0;
+    if (argc == 1 && napi_get_value_double(env, args[0], &limit) == napi_ok)
+        EmulatorService::Instance().QueueSpeedLimit(limit);
+    return Undefined(env);
+}
+
 napi_value GetStatus(napi_env env, napi_callback_info)
 {
     EmulatorStatus status = EmulatorService::Instance().Status();
@@ -429,6 +440,7 @@ napi_value Init(napi_env env, napi_value exports)
         {"setKeyState", nullptr, SetKeyState, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setTouchpadState", nullptr, SetTouchpadState, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"releaseAllInputs", nullptr, ReleaseAllInputs, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"setSpeedLimit", nullptr, SetSpeedLimit, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"getStatus", nullptr, GetStatus, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"subscribeStatus", nullptr, SubscribeStatus, nullptr, nullptr, nullptr, napi_default, nullptr},
     };

@@ -53,6 +53,7 @@ extern uint32_t product, features, asic_user_flags;
 #define emulate_cx (product >= 0x0F0)
 #define emulate_cx2 (product >= 0x1C0)
 extern bool turbo_mode;
+void emu_set_speed_limit(double limit);
 
 enum { LOG_CPU, LOG_IO, LOG_FLASH, LOG_INTS, LOG_ICOUNT, LOG_USB, LOG_GDB, MAX_LOG };
 #define LOG_TYPE_TBL "CIFQ#UG"

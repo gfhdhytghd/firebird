@@ -316,6 +316,16 @@ void EmulatorService::QueueTouchpad(float x, float y, bool contact, bool down)
     inputQueue_.push_back(command);
 }
 
+void EmulatorService::QueueSpeedLimit(double limit)
+{
+    InputCommand command {InputKind::SpeedLimit};
+    command.speedLimit = limit == 2.0 ? 2.0 : (limit <= 0.0 ? 0.0 : 1.0);
+    std::lock_guard<std::mutex> lock(mutex_);
+    speedLimit_ = command.speedLimit;
+    inputQueue_.push_back(command);
+    condition_.notify_all();
+}
+
 void EmulatorService::ReleaseAllInputs()
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -353,6 +363,8 @@ void EmulatorService::CoreTick()
             }
         } else if (command.kind == InputKind::Touchpad) {
             touchpad_set_state(command.x, command.y, command.contact, command.down);
+        } else if (command.kind == InputKind::SpeedLimit) {
+            emu_set_speed_limit(command.speedLimit);
         } else {
             for (uint32_t key = 0; key < pressedKeys_.size(); ++key) {
                 if (pressedKeys_[key])
@@ -399,9 +411,8 @@ void EmulatorService::CoreTick()
     if (lastFrame_.time_since_epoch().count() == 0 || now - lastFrame_ >= std::chrono::milliseconds(33)) {
         lastFrame_ = now;
         lock.unlock();
-        std::array<uint16_t, 320 * 240> frame {};
-        lcd_cx_draw_frame(frame.data());
-        NativeRenderer::Instance().SubmitRgb565(frame.data());
+        lcd_cx_draw_frame(lcdFrame_.data());
+        NativeRenderer::Instance().SubmitRgb565(lcdFrame_.data());
         lock.lock();
         ++frameCount_;
     }
@@ -425,15 +436,18 @@ void EmulatorService::ThreadMain(std::string snapshotPath)
     std::string boot;
     std::string flash;
     bool jit = true;
+    double speedLimit = 1.0;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         boot = bootPath_;
         flash = flashPath_;
         jit = jitEnabled_;
+        speedLimit = speedLimit_;
     }
     path_boot1 = boot;
     path_flash = flash;
     do_translate = jit;
+    emu_set_speed_limit(speedLimit);
     snapshot_use_current_paths = true;
     jit_translated_blocks = 0;
     jit_execution_entries = 0;

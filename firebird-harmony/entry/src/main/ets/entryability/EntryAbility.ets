@@ -18,8 +18,16 @@ export default class EntryAbility extends UIAbility {
         statusBarContentColor: '#FFFFFF',
         navigationBarContentColor: '#FFFFFF'
       });
+      const updateTopInset = (area: window.AvoidArea): void => {
+        AppStorage.setOrCreate<number>('firebirdTopInsetPx', area.topRect.height);
+        AppStorage.set<number>('firebirdTopInsetPx', area.topRect.height);
+      };
+      updateTopInset(mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM));
+      mainWindow.on('avoidAreaChange', (options: window.AvoidAreaOptions): void => {
+        if (options.type === window.AvoidAreaType.TYPE_SYSTEM) updateTopInset(options.area);
+      });
+      windowStage.loadContent('pages/Index');
     });
-    windowStage.loadContent('pages/Index');
   }
 
   onBackground(): void {

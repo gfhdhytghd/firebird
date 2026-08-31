@@ -57,6 +57,21 @@ NativeRenderer &NativeRenderer::Instance()
     return renderer;
 }
 
+NativeRenderer::NativeRenderer() : thread_(&NativeRenderer::RenderLoop, this) {}
+
+NativeRenderer::~NativeRenderer()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        stopping_ = true;
+        condition_.notify_all();
+    }
+    if (thread_.joinable())
+        thread_.join();
+    if (window_)
+        OH_NativeWindow_NativeObjectUnreference(window_);
+}
+
 bool NativeRenderer::RegisterXComponent(void *opaqueEnv, void *opaqueExports)
 {
     auto env = static_cast<napi_env>(opaqueEnv);
@@ -89,7 +104,8 @@ void NativeRenderer::SetSurface(OHNativeWindow *window, uint64_t width, uint64_t
                                                static_cast<int32_t>(height_));
         OH_NativeWindow_NativeWindowHandleOpt(window_, SET_FORMAT,
                                                NATIVEBUFFER_PIXEL_FMT_RGBA_8888);
-        DrawLocked();
+        framePending_ = hasFrame_;
+        condition_.notify_one();
     }
 }
 
@@ -103,7 +119,8 @@ void NativeRenderer::ResizeSurface(OHNativeWindow *window, uint64_t width, uint6
     OH_NativeWindow_NativeWindowHandleOpt(window_, SET_BUFFER_GEOMETRY,
                                            static_cast<int32_t>(width_),
                                            static_cast<int32_t>(height_));
-    DrawLocked();
+    framePending_ = hasFrame_;
+    condition_.notify_one();
 }
 
 void NativeRenderer::DestroySurface(OHNativeWindow *window)
@@ -123,17 +140,45 @@ void NativeRenderer::SubmitRgb565(const uint16_t *pixels)
     std::lock_guard<std::mutex> lock(mutex_);
     std::copy_n(pixels, frame_.size(), frame_.begin());
     hasFrame_ = true;
-    DrawLocked();
+    framePending_ = true;
+    condition_.notify_one();
 }
 
-void NativeRenderer::DrawLocked()
+void NativeRenderer::RenderLoop()
 {
-    if (!window_ || !hasFrame_ || width_ == 0 || height_ == 0)
+    for (;;) {
+        std::array<uint16_t, 320 * 240> frame;
+        OHNativeWindow *window = nullptr;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            condition_.wait(lock, [this] { return stopping_ || framePending_; });
+            if (stopping_)
+                return;
+            framePending_ = false;
+            if (!window_ || !hasFrame_ || width_ == 0 || height_ == 0)
+                continue;
+            frame = frame_;
+            window = window_;
+            width = width_;
+            height = height_;
+            OH_NativeWindow_NativeObjectReference(window);
+        }
+        DrawFrame(window, width, height, frame);
+        OH_NativeWindow_NativeObjectUnreference(window);
+    }
+}
+
+void NativeRenderer::DrawFrame(OHNativeWindow *window, uint32_t width, uint32_t height,
+                               const std::array<uint16_t, 320 * 240> &frame)
+{
+    if (!window || width == 0 || height == 0)
         return;
 
     OHNativeWindowBuffer *buffer = nullptr;
     int releaseFence = -1;
-    if (OH_NativeWindow_NativeWindowRequestBuffer(window_, &buffer, &releaseFence) != NATIVE_ERROR_OK || !buffer)
+    if (OH_NativeWindow_NativeWindowRequestBuffer(window, &buffer, &releaseFence) != NATIVE_ERROR_OK || !buffer)
         return;
 
     if (releaseFence >= 0) {
@@ -147,13 +192,13 @@ void NativeRenderer::DrawLocked()
 
     BufferHandle *handle = OH_NativeWindow_GetBufferHandleFromNative(buffer);
     if (!handle) {
-        OH_NativeWindow_NativeWindowAbortBuffer(window_, buffer);
+        OH_NativeWindow_NativeWindowAbortBuffer(window, buffer);
         return;
     }
     void *mapping = mmap(handle->virAddr, handle->size, PROT_READ | PROT_WRITE,
                          MAP_SHARED, handle->fd, 0);
     if (mapping == MAP_FAILED) {
-        OH_NativeWindow_NativeWindowAbortBuffer(window_, buffer);
+        OH_NativeWindow_NativeWindowAbortBuffer(window, buffer);
         return;
     }
 
@@ -164,7 +209,7 @@ void NativeRenderer::DrawLocked()
     if (strideBytes < targetWidth * sizeof(uint32_t) ||
         static_cast<size_t>(strideBytes) * targetHeight > static_cast<size_t>(handle->size)) {
         munmap(mapping, handle->size);
-        OH_NativeWindow_NativeWindowAbortBuffer(window_, buffer);
+        OH_NativeWindow_NativeWindowAbortBuffer(window, buffer);
         return;
     }
     const uint32_t stridePixels = strideBytes / sizeof(uint32_t);
@@ -180,7 +225,7 @@ void NativeRenderer::DrawLocked()
         const uint32_t sourceY = std::min(239u, y * 240u / drawHeight);
         uint32_t *row = output + (offsetY + y) * stridePixels + offsetX;
         for (uint32_t x = 0; x < drawWidth; ++x) {
-            const uint16_t rgb565 = frame_[sourceY * 320u + std::min(319u, x * 320u / drawWidth)];
+            const uint16_t rgb565 = frame[sourceY * 320u + std::min(319u, x * 320u / drawWidth)];
             const uint32_t r = ((rgb565 >> 11) & 0x1F) * 255 / 31;
             const uint32_t g = ((rgb565 >> 5) & 0x3F) * 255 / 63;
             const uint32_t b = (rgb565 & 0x1F) * 255 / 31;
@@ -193,6 +238,6 @@ void NativeRenderer::DrawLocked()
     Region dirty {};
     dirty.rectNumber = 1;
     dirty.rects = &fullSurface;
-    if (OH_NativeWindow_NativeWindowFlushBuffer(window_, buffer, -1, dirty) != NATIVE_ERROR_OK)
-        OH_NativeWindow_NativeWindowAbortBuffer(window_, buffer);
+    if (OH_NativeWindow_NativeWindowFlushBuffer(window, buffer, -1, dirty) != NATIVE_ERROR_OK)
+        OH_NativeWindow_NativeWindowAbortBuffer(window, buffer);
 }
