@@ -16,32 +16,38 @@ layer. The first supported calculator products are TI-Nspire CX II CAS
   image, snapshot, signing file, or local release configuration is present.
 - The ordinary Firebird headless target builds successfully after these core
   changes.
-- A signed HAP and physical-device JIT/cold-boot run still require a supported
-  DevEco Studio host, developer signing profile, connected HarmonyOS NEXT
-  phone, and user-supplied ROM/flash files. They are not claimed as verified.
+- An API 26 arm64 Debug HAP was developer-signed, installed, and launched on a
+  HUAWEI Mate XTs (`GRL-AL20`) running OpenHarmony `7.0.0.102`. The native
+  XComponent Surface remained active and the on-device AArch64 W^X probe passed.
+- CX II/CX II CAS cold boot and proof of increasing translated/executed JIT
+  block counters remain pending user-supplied ROM/flash files.
 
-The source tree also supports command-line hvigor builds with version `5.18.6`
-and API 18. The recorded unsigned Linux build used the official OpenHarmony API
-18 base components plus a temporary, non-production resource-tool shim only as
-a compile check; signing and device acceptance must still use the complete
-HarmonyOS SDK installed by DevEco Studio.
+The active DevEco target is HarmonyOS 7 / API 26 (`26.0.0`) for compile, target,
+and minimum-compatible SDK. The earlier API 18 command-line build remains a
+historical source/build smoke check only; signing and device acceptance use the
+complete HarmonyOS SDK installed by DevEco Studio.
 
 Recorded tool environment for this port:
 
 - OpenHarmony SDK `5.1.0.107`, Native API 18, arm64 OHOS clang on the source host;
-- hvigor and Harmony plugin `5.18.6`;
+- historical Linux smoke build: hvigor and Harmony plugin `5.18.6`;
+- Windows HarmonyOS 7 build: the all-in-one Hvigor/Harmony plugin bundled with
+  DevEco Studio `26.0.0.821`;
 - Windows 11 build host `10.0.26100.9168`, Node.js `24.19.0`, and official
   DevEco CLI `1.3.0-stable`;
-- full DevEco Studio SDK, developer signing identity, connected-phone model,
-  and phone system version: pending the account/device acceptance gates below.
+- DevEco Studio `26.0.0.821` and bundled HarmonyOS 7 / API 26 SDK on Windows;
+- test phone: HUAWEI Mate XTs (`GRL-AL20`), OpenHarmony `7.0.0.102`, API 26,
+  `arm64-v8a`; connected with HDC `3.2.0f` over TCP;
+- automatic developer signing and signed-HAP install passed. Signing material
+  and its generated local configuration are deliberately not committed.
 
 ## Build
 
 1. Install the current stable DevEco Studio and its matching HarmonyOS SDK and
    Native SDK on a supported host.
 2. Open this `firebird-harmony` directory as a project.
-3. Let DevEco install hvigor `5.18.6` and the matching HarmonyOS 5.1.0/API 18
-   SDK components requested by the project.
+3. Install the matching HarmonyOS 7 / API 26 SDK components, including the
+   Native SDK.
 4. Select an arm64 HarmonyOS NEXT phone target. The entry module deliberately
    declares only `arm64-v8a`.
 5. Add a developer signing configuration locally. Never commit the certificate,
@@ -83,6 +89,10 @@ JIT is enabled by default. Before Firebird starts, the native probe:
 4. changes the page to RX;
 5. executes it and verifies the return value;
 6. unmaps the RX page.
+
+The probe runs when the ArkUI page appears, even before ROM/flash import. On the
+recorded Mate XTs run the drawer reported `JIT probe: passed`; this proves code
+page execution policy but, by design, not translator execution.
 
 The translator uses the same RW/RX helpers and never requests RWX. If the probe
 or translator initialization fails while JIT is requested, startup fails with
@@ -132,5 +142,5 @@ configuration, DevEco state, and build output.
 - The first renderer is a CPU-mapped RGBA8888 NativeWindow buffer with
   aspect-preserving nearest-neighbor scaling. EGL/OpenGL ES is intentionally
   deferred until device measurements justify it.
-- Physical-device and signed-HAP results are device/toolchain-specific and must
-  be recorded after a supported DevEco host and authorized phone are available.
+- Physical-device cold boot, translator counters, rotation, lifecycle, and full
+  input acceptance still require valid user-supplied ROM/flash images.

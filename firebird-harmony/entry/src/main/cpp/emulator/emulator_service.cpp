@@ -99,6 +99,24 @@ FileValidation EmulatorService::Configure(std::string bootPath, std::string flas
     return validation;
 }
 
+JitProbeResult EmulatorService::ProbeJit()
+{
+    JitProbeResult result = RunJitProbe();
+    void (*notifier)() = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        status_.jitProbePassed = result.success;
+        if (!result.success) {
+            status_.state = "error";
+            status_.error = result.error;
+        }
+        notifier = statusNotifier_;
+    }
+    if (notifier)
+        notifier();
+    return result;
+}
+
 bool EmulatorService::Start(const std::string &snapshotPath, std::string &error)
 {
     std::unique_lock<std::mutex> lock(mutex_);

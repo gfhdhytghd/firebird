@@ -27,6 +27,7 @@ struct Index {
     await this.fileStore.installBundledImagesIfPresent();
     const configuration = await this.fileStore.loadConfiguration();
     this.jitEnabled = configuration.jitEnabled;
+    if (this.jitEnabled) await firebird.probeJit();
     AppStorage.setOrCreate<string>('firebirdAutosavePath', this.fileStore.autosavePath());
     try { await this.configureFiles(); } catch (_) {}
   }
@@ -42,7 +43,7 @@ struct Index {
       jitEnabled: this.jitEnabled
     };
     await this.fileStore.saveConfiguration(configuration);
-    if (!this.fileStore.exists(configuration.bootPath) || !this.fileStore.exists(configuration.flashPath))
+    if (!this.fileStore.bootReady() || !this.fileStore.flashReady())
       return;
     const validation: ValidationResult = await firebird.configure(configuration);
     const current: EmulatorStatus = firebird.getStatus();

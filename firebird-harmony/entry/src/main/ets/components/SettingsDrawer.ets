@@ -7,7 +7,7 @@ export struct SettingsDrawer {
   @Link status: EmulatorStatus;
   @Link jitEnabled: boolean;
   @Prop fileStore: FileStore;
-  @Prop onFilesChanged: () => Promise<void>;
+  onFilesChanged: () => Promise<void> = async () => {};
   @State private snapshots: Array<string> = [];
   @State private renameValue: string = '';
 
@@ -71,9 +71,9 @@ export struct SettingsDrawer {
       Column({ space: 10 }) {
         Text('FIREBIRD').fontSize(24).fontWeight(FontWeight.Bold).fontColor(Color.White)
         Text(`State: ${this.status.state}`).fontColor(Color.White)
-        Text(`Boot ROM: ${this.fileStore.exists(this.fileStore.bootPath()) ? 'ready' : 'missing'}`)
+        Text(`Boot ROM: ${this.fileStore.bootReady() ? 'ready' : 'missing'}`)
           .fontColor(Color.White)
-        Text(`Flash: ${this.fileStore.exists(this.fileStore.flashPath()) ? 'ready' : 'missing'}`)
+        Text(`Flash: ${this.fileStore.flashReady() ? 'ready' : 'missing'}`)
           .fontColor(Color.White)
         Text(`Model: ${this.status.model || 'unknown'}`).fontColor(Color.White)
         Text(`Speed: ${(this.status.speed * 100).toFixed(0)}%`).fontColor(Color.White)

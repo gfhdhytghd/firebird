@@ -26,9 +26,9 @@ export class FileStore {
 
   async installBundledImagesIfPresent(): Promise<void> {
     if (!this.exists(this.bootPath()))
-      this.copyBundledRawFile('private/boot1.rom', this.bootPath());
+      this.copyBundledRawFile('private/boot1.rom', this.bootPath(), 0x80000);
     if (!this.exists(this.flashPath()))
-      this.copyBundledRawFile('private/flash.img', this.flashPath());
+      this.copyBundledRawFile('private/flash.img', this.flashPath(), 132 * 1024 * 1024);
   }
 
   exists(path: string): boolean {
@@ -39,6 +39,9 @@ export class FileStore {
       return false;
     }
   }
+
+  bootReady(): boolean { return this.hasSize(this.bootPath(), 0x80000); }
+  flashReady(): boolean { return this.hasSize(this.flashPath(), 132 * 1024 * 1024); }
 
   async importBoot(): Promise<string> {
     return this.importDocument(`${this.root}/images/boot-candidate.tmp`, ['.rom', '.bin', '.img']);
@@ -131,12 +134,16 @@ export class FileStore {
     }
   }
 
-  private copyBundledRawFile(resourceName: string, destination: string): void {
+  private copyBundledRawFile(resourceName: string, destination: string, expectedLength: number): void {
     let descriptor: resourceManager.RawFileDescriptor;
     try {
       descriptor = this.context.resourceManager.getRawFdSync(resourceName);
     } catch (_) {
       return; // Normal public builds deliberately contain no private images.
+    }
+    if (descriptor.length !== expectedLength) {
+      this.context.resourceManager.closeRawFd(resourceName);
+      return;
     }
     const temporary = `${destination}.tmp`;
     const output = fs.openSync(temporary, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
@@ -158,6 +165,15 @@ export class FileStore {
       fs.closeSync(output);
       this.context.resourceManager.closeRawFd(resourceName);
       if (this.exists(temporary)) fs.unlinkSync(temporary);
+    }
+  }
+
+  private hasSize(path: string, expectedLength: number): boolean {
+    if (!this.exists(path)) return false;
+    try {
+      return fs.statSync(path).size === expectedLength;
+    } catch (_) {
+      return false;
     }
   }
 

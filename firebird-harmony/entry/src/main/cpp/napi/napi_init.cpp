@@ -185,7 +185,7 @@ napi_value ValidationObject(napi_env env, const FileValidation &result)
 
 napi_value ProbeJit(napi_env env, napi_callback_info)
 {
-    JitProbeResult result = RunJitProbe();
+    JitProbeResult result = EmulatorService::Instance().ProbeJit();
     napi_value object;
     napi_create_object(env, &object);
     Set(env, object, "success", Boolean(env, result.success));

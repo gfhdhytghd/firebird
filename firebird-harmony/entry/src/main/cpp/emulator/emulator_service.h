@@ -31,6 +31,8 @@ struct FileValidation {
     std::string error;
 };
 
+struct JitProbeResult;
+
 class EmulatorService {
 public:
     static EmulatorService &Instance();
@@ -38,6 +40,7 @@ public:
 
     FileValidation ValidateFiles(const std::string &bootPath, const std::string &flashPath) const;
     FileValidation Configure(std::string bootPath, std::string flashPath, bool jitEnabled);
+    JitProbeResult ProbeJit();
     bool Start(const std::string &snapshotPath, std::string &error);
     void Pause();
     void Resume();
