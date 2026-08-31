@@ -4,3 +4,35 @@
 *.user.*
 *.bc
 *.qmlc
+
+# HarmonyOS/DevEco generated state
+firebird-harmony/.hvigor/
+firebird-harmony/.idea/
+firebird-harmony/build/
+firebird-harmony/build*/
+firebird-harmony/entry/build/
+firebird-harmony/local.properties
+firebird-harmony/oh_modules/
+firebird-harmony/entry/oh_modules/
+firebird-harmony/.local/
+firebird-harmony/**/*.local.*
+
+# Private calculator images and snapshots
+firebird-harmony/private/
+firebird-harmony/entry/src/main/resources/rawfile/private/
+*.boot1.rom
+*.boot2.rom
+*.flash.img
+*.snapshot
+*.snapshot.gz
+*.fbhs
+
+# Signing material and local release configuration
+*.p12
+*.p7b
+*.cer
+*.pem
+*.key
+firebird-harmony/signing/
+firebird-harmony/scripts/package-private.local.*
+firebird-harmony/private-release.local.json5
