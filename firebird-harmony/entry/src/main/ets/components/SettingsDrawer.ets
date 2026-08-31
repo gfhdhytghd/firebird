@@ -2,7 +2,7 @@ import * as firebird from 'libfirebird_harmony.so';
 import { EmulatorStatus, SnapshotInfo, ValidationResult } from 'libfirebird_harmony.so';
 import { DebuggerSettings, FileStore, FirebirdProfile, TransferFile } from '../bridge/FileStore';
 
-const PANEL_BG: string = '#111315';
+const PANEL_BG: string = '#000000';
 const CARD_BG: string = '#20242A';
 const ACTIVE: string = '#5CC8D7';
 const MUTED: string = '#9AA3AD';
@@ -193,6 +193,8 @@ export struct SettingsDrawer {
       }.scrollable(ScrollDirection.Horizontal).width('100%')
       Row({ space: 6 }) {
         TextInput({ text: this.profileName, placeholder: 'New profile name' })
+          .fontColor(Color.White).placeholderColor(MUTED).caretColor(ACTIVE)
+          .backgroundColor(CARD_BG).borderRadius(5)
           .onChange((value: string) => this.profileName = value).layoutWeight(1)
         Button('Add').onClick(() => this.run(async () => await this.createProfile()))
       }.width('100%')
@@ -232,6 +234,8 @@ export struct SettingsDrawer {
           }
           Row({ space: 4 }) {
             TextInput({ text: this.renameValue, placeholder: 'Rename snapshot' })
+              .fontColor(Color.White).placeholderColor(MUTED).caretColor(ACTIVE)
+              .backgroundColor('#15191E').borderRadius(5)
               .onChange((value: string) => this.renameValue = value).layoutWeight(1)
             Button('Rename').fontSize(11).onClick(() => this.run(async () => {
               if (this.renameValue.length === 0) throw new Error('Enter a snapshot name');
@@ -287,6 +291,8 @@ export struct SettingsDrawer {
     Column({ space: 8 }) {
       this.sectionTitle('File Transfer', 'Send documents to the running calculator over its emulated USB link.')
       TextInput({ text: this.transferDirectory, placeholder: '/ndless' })
+        .fontColor(Color.White).placeholderColor(MUTED).caretColor(ACTIVE)
+        .backgroundColor(CARD_BG).borderRadius(5)
         .onChange((value: string) => this.transferDirectory = value).width('100%')
       Button(this.transferFileName.length > 0 ? this.transferFileName : 'Choose file')
         .width('100%').onClick(() => this.run(async () => await this.chooseTransferFile()))
@@ -311,6 +317,8 @@ export struct SettingsDrawer {
           .onChange((value: boolean) => this.gdbEnabled = value)
       }.width('100%').padding(9).backgroundColor(CARD_BG).borderRadius(5)
       TextInput({ text: this.gdbPortText, placeholder: '3333' })
+        .fontColor(Color.White).placeholderColor(MUTED).caretColor(ACTIVE)
+        .backgroundColor(CARD_BG).borderRadius(5)
         .type(InputType.Number).onChange((value: string) => this.gdbPortText = value).width('100%')
 
       this.sectionTitle('Internal debugger', 'Use Firebird commands locally or over its remote console.')
@@ -320,6 +328,8 @@ export struct SettingsDrawer {
           .onChange((value: boolean) => this.remoteEnabled = value)
       }.width('100%').padding(9).backgroundColor(CARD_BG).borderRadius(5)
       TextInput({ text: this.remotePortText, placeholder: '3334' })
+        .fontColor(Color.White).placeholderColor(MUTED).caretColor(ACTIVE)
+        .backgroundColor(CARD_BG).borderRadius(5)
         .type(InputType.Number).onChange((value: string) => this.remotePortText = value).width('100%')
       Row() {
         Text('Enter debugger on startup').fontColor(Color.White).layoutWeight(1)
@@ -350,6 +360,8 @@ export struct SettingsDrawer {
         .padding(8).backgroundColor('#08090B')
       Row({ space: 5 }) {
         TextInput({ text: this.debugCommand, placeholder: 'Command, e.g. c' })
+          .fontColor(Color.White).placeholderColor(MUTED).caretColor(ACTIVE)
+          .backgroundColor(CARD_BG).borderRadius(5)
           .onChange((value: string) => this.debugCommand = value).layoutWeight(1)
         Button('Send').onClick(() => {
           if (this.debugCommand.length > 0) {

@@ -71,6 +71,9 @@ assert "activeProfile" in file_store and "profiles/${this.activeProfileId}" in f
 assert "name.startsWith('autosave-')" in file_store
 for tab in ("Config", "Emulator", "Transfer", "Debugger"):
     assert f"this.tabButton('{tab}'" in settings_drawer
+assert "const PANEL_BG: string = '#000000'" in settings_drawer
+assert settings_drawer.count("placeholderColor(MUTED)") == 6
+assert settings_drawer.count("caretColor(ACTIVE)") == 6
 for native_api in ("sendFile", "exitPressToTest", "configureDebugger", "enterDebugger",
                    "sendDebuggerCommand", "getDebugLog"):
     assert f'{{"{native_api}"' in napi_source, f"missing NAPI export {native_api}"
