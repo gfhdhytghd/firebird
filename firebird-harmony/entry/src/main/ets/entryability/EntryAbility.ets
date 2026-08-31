@@ -1,6 +1,7 @@
 import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import * as firebird from 'libfirebird_harmony.so';
 
 export default class EntryAbility extends UIAbility {
   onCreate(_want: Want, _launchParam: AbilityConstant.LaunchParam): void {
@@ -22,10 +23,17 @@ export default class EntryAbility extends UIAbility {
   }
 
   onBackground(): void {
-    AppStorage.setOrCreate<boolean>('firebirdBackground', true);
+    firebird.releaseAllInputs();
+    firebird.pause();
+    const autosavePath = AppStorage.get<string>('firebirdAutosavePath');
+    if (autosavePath) {
+      firebird.saveSnapshot(autosavePath).catch((error: Error) => {
+        hilog.error(0x4642, 'Firebird', `Autosave failed: ${error.message}`);
+      });
+    }
   }
 
   onForeground(): void {
-    AppStorage.setOrCreate<boolean>('firebirdBackground', false);
+    firebird.resume();
   }
 }

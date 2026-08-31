@@ -11,6 +11,7 @@ firebird-harmony/.idea/
 firebird-harmony/build/
 firebird-harmony/build*/
 firebird-harmony/entry/build/
+firebird-harmony/entry/.cxx/
 firebird-harmony/local.properties
 firebird-harmony/oh_modules/
 firebird-harmony/entry/oh_modules/

@@ -98,6 +98,7 @@ extern "C" void addr_cache_init(void)
                                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
     if (addr_cache == MAP_FAILED) {
         addr_cache = nullptr;
+        std::fprintf(stderr, "Firebird: failed to allocate address cache: %s\n", std::strerror(errno));
         return;
     }
 #if !defined(AC_FLAGS)

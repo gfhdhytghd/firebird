@@ -323,6 +323,11 @@ bool emu_start(unsigned int port_gdb, unsigned int port_rdbg, const char *snapsh
 #endif
 
     addr_cache_init();
+    if (!addr_cache) {
+        gui_debug_printf("Could not allocate the CPU address cache. Startup aborted.\n");
+        emu_cleanup();
+        return false;
+    }
 
     throttle_timer_on();
 

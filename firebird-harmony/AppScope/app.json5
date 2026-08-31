@@ -4,6 +4,7 @@
     "vendor": "Firebird Emulator",
     "versionCode": 1,
     "versionName": "0.1.0",
-    "label": "$string:app_name"
+    "label": "$string:app_name",
+    "icon": "$media:app_icon"
   }
 }

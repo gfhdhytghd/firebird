@@ -211,6 +211,11 @@ bool translate_init()
 	return translate_buffer != nullptr;
 }
 
+bool translate_is_initialized()
+{
+	return translate_buffer != nullptr;
+}
+
 void translate_deinit()
 {
 	if(!translate_buffer)

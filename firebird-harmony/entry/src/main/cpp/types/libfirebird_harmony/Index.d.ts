@@ -21,6 +21,7 @@ export interface EmulatorStatus {
   jitProbePassed: boolean;
   jitInitialized: boolean;
   translatedBlocks: number;
+  jitExecutionEntries: number;
   product: number;
   model: string;
 }
@@ -29,6 +30,14 @@ export interface EmulatorConfiguration {
   bootPath: string;
   flashPath: string;
   jitEnabled: boolean;
+}
+
+export interface SnapshotInfo {
+  valid: boolean;
+  harmonyFormat: boolean;
+  version: number;
+  product: number;
+  error: string;
 }
 
 export const probeJit: () => Promise<JitProbeResult>;
@@ -41,11 +50,9 @@ export const stop: () => Promise<void>;
 export const restartCold: () => Promise<void>;
 export const saveSnapshot: (path: string) => Promise<void>;
 export const loadSnapshot: (path: string) => Promise<void>;
-export const inspectSnapshot: (path: string) => Promise<Record<string, string | number | boolean>>;
+export const inspectSnapshot: (path: string) => Promise<SnapshotInfo>;
 export const setKeyState: (keyId: number, pressed: boolean) => void;
 export const setTouchpadState: (x: number, y: number, contact: boolean, down: boolean) => void;
 export const releaseAllInputs: () => void;
 export const getStatus: () => EmulatorStatus;
-export const setSurface: (surfaceId: bigint, width: number, height: number) => void;
-export const resizeSurface: (surfaceId: bigint, width: number, height: number) => void;
-export const destroySurface: (surfaceId: bigint) => void;
+export const subscribeStatus: (callback: (status: EmulatorStatus) => void) => void;

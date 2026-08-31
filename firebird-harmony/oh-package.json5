@@ -1,4 +1,5 @@
 {
+  "modelVersion": "5.0.0",
   "name": "firebird-harmony",
   "version": "0.1.0",
   "description": "Native HarmonyOS NEXT port of Firebird",
