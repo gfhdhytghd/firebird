@@ -23,6 +23,12 @@ Rectangle {
         width: 25
         height: 20
         text: "a"
+        // The two faces meet at x=25, so the centre seam must not be claimed
+        // by both input areas.  Only consume the real outer/vertical gaps.
+        hitMarginLeft: 5
+        hitMarginRight: 0
+        hitMarginTop: 5
+        hitMarginBottom: 5
     }
 
     NButton {
@@ -33,6 +39,10 @@ Rectangle {
         width: 25
         height: 20
         text: "b"
+        hitMarginLeft: 0
+        hitMarginRight: 5
+        hitMarginTop: 5
+        hitMarginBottom: 5
     }
 
     Rectangle {
@@ -93,4 +103,3 @@ Rectangle {
         font.bold: true
     }
 }
-

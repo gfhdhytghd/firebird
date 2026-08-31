@@ -10,6 +10,10 @@ export struct CalculatorKey {
   @Prop legendOffset: number = 10;
   @Prop faceStyle: string = 'function';
   @Prop fontSize: number = 12;
+  @Prop hitLeft: number = 0;
+  @Prop hitRight: number = 0;
+  @Prop hitTop: number = 0;
+  @Prop hitBottom: number = 0;
   @State private pressed: boolean = false;
   private activePointers: Set<number> = new Set();
 
@@ -31,6 +35,14 @@ export struct CalculatorKey {
     return this.legendHeight > 0 ? this.legendHeight : Math.min(this.legendOffset, this.keyHeight * 0.5);
   }
 
+  private hitWidth(): string {
+    return `calc(100% + ${this.hitLeft + this.hitRight}vp)`;
+  }
+
+  private hitHeight(): string {
+    return `calc(100% + ${this.hitTop + this.hitBottom}vp)`;
+  }
+
   private release(): void {
     this.activePointers.clear();
     if (!this.pressed) return;
@@ -50,6 +62,7 @@ export struct CalculatorKey {
         .border({ width: this.pressed ? 2 : 1, color: '#8B9599', radius: 4 })
         .height(this.keyHeight)
         .width('100%')
+        .translate({ y: this.pressed ? 1 : 0 })
       if (this.secondary.length > 0) {
         Text(this.secondary)
           .fontColor('#68CCE0')
@@ -66,6 +79,12 @@ export struct CalculatorKey {
     .width('100%')
     .clip(false)
     .hitTestBehavior(HitTestMode.Block)
+    .responseRegion({
+      x: -this.hitLeft,
+      y: -this.hitTop,
+      width: this.hitWidth(),
+      height: this.hitHeight()
+    })
     .onTouch((event: TouchEvent) => {
       if (event.type === TouchType.Down) {
         event.changedTouches.forEach((point: TouchObject): void => {

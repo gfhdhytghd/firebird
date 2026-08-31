@@ -60,6 +60,7 @@ struct KeyRow {
   @Prop rowHeight: number;
   @Prop gap: number = 2;
   @Prop fontSize: number = 10;
+  @Prop hitTop: number = 0;
 
   build() {
     Row({ space: this.gap }) {
@@ -71,7 +72,10 @@ struct KeyRow {
             secondary: key.secondary ?? '',
             keyHeight: this.rowHeight,
             faceStyle: key.style ?? 'alpha',
-            fontSize: this.fontSize
+            fontSize: this.fontSize,
+            hitLeft: this.gap / 2,
+            hitRight: this.gap / 2,
+            hitTop: this.hitTop
           }).layoutWeight(key.weight ?? 1)
         } else {
           Blank().layoutWeight(key.weight ?? 1)
@@ -135,7 +139,9 @@ struct AlphaKeyRow {
             label: key.label,
             keyHeight: this.rowHeight,
             faceStyle: 'alpha',
-            fontSize: this.fontSize
+            fontSize: this.fontSize,
+            hitLeft: this.gap / 2,
+            hitRight: this.gap / 2
           }).width(this.itemWidth(key))
         } else {
           Blank().width(this.itemWidth(key))
@@ -202,12 +208,15 @@ export struct CalculatorKeypad {
         Row({ space: 0 }) {
           Column({ space: this.y(16) }) {
             CalculatorKey({ keyId: 73, label: 'esc', keyHeight: this.y(20), legendOffset: this.y(10),
-              faceStyle: 'nav', fontSize: this.font(9) })
+              faceStyle: 'nav', fontSize: this.font(9), hitLeft: this.x(5), hitRight: this.x(17.5),
+              hitTop: this.y(6) })
             CalculatorKey({ keyId: 65, label: 'pad', secondary: 'save', keyHeight: this.y(20),
               legendOffset: this.y(10),
-              faceStyle: 'nav', fontSize: this.font(9) })
+              faceStyle: 'nav', fontSize: this.font(9), hitLeft: this.x(5), hitRight: this.x(17.5),
+              hitTop: this.y(16) })
             CalculatorKey({ keyId: 75, label: 'tab', keyHeight: this.y(20), legendOffset: this.y(10),
-              faceStyle: 'nav', fontSize: this.font(9) })
+              faceStyle: 'nav', fontSize: this.font(9), hitLeft: this.x(5), hitRight: this.x(17.5),
+              hitTop: this.y(16), hitBottom: this.y(6) })
           }
           .width(this.x(33))
           .height(this.y(92))
@@ -218,13 +227,16 @@ export struct CalculatorKeypad {
 
           Column({ space: this.y(16) }) {
             CalculatorKey({ keyId: 9, label: '⌂ on', keyHeight: this.y(20), legendOffset: this.y(10),
-              faceStyle: 'on', fontSize: this.font(8) })
+              faceStyle: 'on', fontSize: this.font(8), hitLeft: this.x(17.5), hitRight: this.x(5),
+              hitTop: this.y(6) })
             CalculatorKey({ keyId: 69, label: 'doc', secondary: '+page', keyHeight: this.y(20),
               legendOffset: this.y(10),
-              faceStyle: 'nav', fontSize: this.font(9) })
+              faceStyle: 'nav', fontSize: this.font(9), hitLeft: this.x(17.5), hitRight: this.x(5),
+              hitTop: this.y(16) })
             CalculatorKey({ keyId: 71, label: 'menu', secondary: '☰', keyHeight: this.y(20),
               legendOffset: this.y(10),
-              faceStyle: 'nav', fontSize: this.font(9) })
+              faceStyle: 'nav', fontSize: this.font(9), hitLeft: this.x(17.5), hitRight: this.x(5),
+              hitTop: this.y(16), hitBottom: this.y(6) })
           }
           .width(this.x(33))
           .height(this.y(92))
@@ -240,7 +252,8 @@ export struct CalculatorKeypad {
           Column({ space: 0 }) {
             Row() {
               CalculatorKey({ keyId: 86, label: 'ctrl', keyHeight: this.y(20),
-                faceStyle: 'accent', fontSize: this.font(9) }).width(this.x(33))
+                faceStyle: 'accent', fontSize: this.font(9), hitTop: this.y(5),
+                hitRight: this.x(21) }).width(this.x(33))
               Blank()
             }.width('100%').height(this.y(20))
             DualKey({ leftId: 51, leftLabel: '=', leftSecondary: '|≠≥>',
@@ -260,11 +273,16 @@ export struct CalculatorKeypad {
           .height(this.y(140))
 
           Column({ space: this.y(10) }) {
-            KeyRow({ keys: NUMBER_ROW_1, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(8) })
-            KeyRow({ keys: NUMBER_ROW_2, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(10) })
-            KeyRow({ keys: NUMBER_ROW_3, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(10) })
-            KeyRow({ keys: NUMBER_ROW_4, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(10) })
-            KeyRow({ keys: NUMBER_ROW_5, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(9) })
+            KeyRow({ keys: NUMBER_ROW_1, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(8),
+              hitTop: this.y(10) })
+            KeyRow({ keys: NUMBER_ROW_2, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(10),
+              hitTop: this.y(10) })
+            KeyRow({ keys: NUMBER_ROW_3, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(10),
+              hitTop: this.y(10) })
+            KeyRow({ keys: NUMBER_ROW_4, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(10),
+              hitTop: this.y(10) })
+            KeyRow({ keys: NUMBER_ROW_5, rowHeight: this.y(20), gap: this.x(10), fontSize: this.font(9),
+              hitTop: this.y(10) })
           }
           .layoutWeight(1)
           .height(this.y(140))
@@ -273,7 +291,7 @@ export struct CalculatorKeypad {
             Row() {
               Blank()
               CalculatorKey({ keyId: 64, label: 'del', secondary: 'clear', keyHeight: this.y(20),
-                fontSize: this.font(9) }).width(this.x(33))
+                fontSize: this.font(9), hitTop: this.y(10), hitLeft: this.x(21) }).width(this.x(33))
             }.width('100%').height(this.y(20))
             DualKey({ leftId: 63, leftLabel: '▦', leftSecondary: ':=',
               rightId: 62, rightLabel: '☷', rightSecondary: '∞ β °',
@@ -286,7 +304,7 @@ export struct CalculatorKeypad {
               keyHeight: this.y(30), fontSize: this.font(10) })
             Blank().height(this.y(10))
             CalculatorKey({ keyId: 1, label: 'enter', secondary: '≈', keyHeight: this.y(20),
-              fontSize: this.font(8) })
+              fontSize: this.font(8), hitTop: this.y(10), hitBottom: this.y(3) })
           }
           .width(this.x(50))
           .height(this.y(140))

@@ -5,11 +5,14 @@ import re
 
 ROOT = Path(__file__).resolve().parents[2]
 keypad = (ROOT / "firebird-harmony/entry/src/main/ets/components/CalculatorKeypad.ets").read_text()
+calculator_key = (ROOT / "firebird-harmony/entry/src/main/ets/components/CalculatorKey.ets").read_text()
 physical = (ROOT / "firebird-harmony/entry/src/main/ets/bridge/PhysicalKeyMap.ets").read_text()
 file_store = (ROOT / "firebird-harmony/entry/src/main/ets/bridge/FileStore.ets").read_text()
 index_page = (ROOT / "firebird-harmony/entry/src/main/ets/pages/Index.ets").read_text()
 entry_ability = (ROOT / "firebird-harmony/entry/src/main/ets/entryability/EntryAbility.ets").read_text()
 native_types = (ROOT / "firebird-harmony/entry/src/main/cpp/types/libfirebird_harmony/Index.d.ts").read_text()
+settings_drawer = (ROOT / "firebird-harmony/entry/src/main/ets/components/SettingsDrawer.ets").read_text()
+napi_source = (ROOT / "firebird-harmony/entry/src/main/cpp/napi/napi_init.cpp").read_text()
 ids = {int(value) for value in re.findall(r"(?:id|keyId|leftId|rightId):\s*(\d+)", keypad)}
 
 touchpad = (ROOT / "firebird-harmony/entry/src/main/ets/components/Touchpad.ets").read_text()
@@ -29,6 +32,11 @@ expected = {
 assert ids == expected, f"ArkUI keypad coverage mismatch: missing={expected - ids}, extra={ids - expected}"
 assert "{ id: 4, label: 'space', span: 2 }" in keypad
 assert "this.columnWidth * span + this.gap * (span - 1)" in keypad
+assert ".responseRegion({" in calculator_key
+for hit_prop in ("hitLeft", "hitRight", "hitTop", "hitBottom"):
+    assert f"@Prop {hit_prop}" in calculator_key
+assert "hitLeft: this.gap / 2" in keypad and "hitRight: this.gap / 2" in keypad
+assert "hitTop: this.y(10)" in keypad
 
 assert "repeatTime" not in physical
 for key_code in ("KEYCODE_HOME", "KEYCODE_MOVE_END", "KEYCODE_PAGE_UP", "KEYCODE_PAGE_DOWN",
@@ -42,6 +50,14 @@ assert "setSpeedLimit(2)" in index_page and "setSpeedLimit(0)" in index_page
 assert "setSpeedLimit: (limit: 1 | 2 | 0)" in native_types
 assert "unlinkSync(destination)" not in file_store
 assert "boot-candidate.tmp" in file_store and "flash-candidate.tmp" in file_store
+assert "activeProfile" in file_store and "profiles/${this.activeProfileId}" in file_store
+assert "name.startsWith('autosave-')" in file_store
+for tab in ("Config", "Emulator", "Transfer", "Debugger"):
+    assert f"this.tabButton('{tab}'" in settings_drawer
+for native_api in ("sendFile", "exitPressToTest", "configureDebugger", "enterDebugger",
+                   "sendDebuggerCommand", "getDebugLog"):
+    assert f'{{"{native_api}"' in napi_source, f"missing NAPI export {native_api}"
+    assert f"export const {native_api}" in native_types, f"missing native declaration {native_api}"
 
 for relative in (
     "firebird-harmony/AppScope/app.json5",
