@@ -15,6 +15,12 @@
 #include "core/keypad.h"
 #include "core/usblink_queue.h"
 
+#ifdef IS_IOS_BUILD
+int iosSafeAreaTop();
+int iosSafeAreaLeft();
+int iosSafeAreaRight();
+#endif
+
 QMLBridge *the_qml_bridge = nullptr;
 
 QMLBridge::QMLBridge(QObject *parent) : QObject(parent)
@@ -68,6 +74,33 @@ QMLBridge::QMLBridge(QObject *parent) : QObject(parent)
 
 QMLBridge::~QMLBridge()
 {}
+
+int QMLBridge::safeAreaTop()
+{
+#ifdef IS_IOS_BUILD
+    return iosSafeAreaTop();
+#else
+    return 0;
+#endif
+}
+
+int QMLBridge::safeAreaLeft()
+{
+#ifdef IS_IOS_BUILD
+    return iosSafeAreaLeft();
+#else
+    return 0;
+#endif
+}
+
+int QMLBridge::safeAreaRight()
+{
+#ifdef IS_IOS_BUILD
+    return iosSafeAreaRight();
+#else
+    return 0;
+#endif
+}
 
 unsigned int QMLBridge::getGDBPort()
 {
