@@ -9,10 +9,6 @@ export interface ValidationResult {
   valid: boolean;
   product: number;
   model: string;
-  usbLinkConnected: boolean;
-  transferProgress: number;
-  debuggerActive: boolean;
-  debuggerWaitingForInput: boolean;
   error: string;
 }
 
@@ -28,6 +24,10 @@ export interface EmulatorStatus {
   jitExecutionEntries: number;
   product: number;
   model: string;
+  usbLinkConnected: boolean;
+  transferProgress: number;
+  debuggerActive: boolean;
+  debuggerWaitingForInput: boolean;
 }
 
 export interface EmulatorConfiguration {

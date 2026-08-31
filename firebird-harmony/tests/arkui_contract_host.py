@@ -13,6 +13,7 @@ entry_ability = (ROOT / "firebird-harmony/entry/src/main/ets/entryability/EntryA
 native_types = (ROOT / "firebird-harmony/entry/src/main/cpp/types/libfirebird_harmony/Index.d.ts").read_text()
 settings_drawer = (ROOT / "firebird-harmony/entry/src/main/ets/components/SettingsDrawer.ets").read_text()
 napi_source = (ROOT / "firebird-harmony/entry/src/main/cpp/napi/napi_init.cpp").read_text()
+emulator_service = (ROOT / "firebird-harmony/entry/src/main/cpp/emulator/emulator_service.cpp").read_text()
 ids = {int(value) for value in re.findall(r"(?:id|keyId|leftId|rightId):\s*(\d+)", keypad)}
 
 touchpad = (ROOT / "firebird-harmony/entry/src/main/ets/components/Touchpad.ets").read_text()
@@ -48,6 +49,13 @@ assert "firebirdTopInsetPx" in entry_ability and "getWindowAvoidArea" in entry_a
 assert "px2vp(this.topInsetPx)" in index_page
 assert "setSpeedLimit(2)" in index_page and "setSpeedLimit(0)" in index_page
 assert "setSpeedLimit: (limit: 1 | 2 | 0)" in native_types
+validation_type = re.search(r"export interface ValidationResult \{(.*?)\n\}", native_types, re.S)
+status_type = re.search(r"export interface EmulatorStatus \{(.*?)\n\}", native_types, re.S)
+assert validation_type is not None and status_type is not None
+for status_field in ("usbLinkConnected", "transferProgress", "debuggerActive",
+                     "debuggerWaitingForInput"):
+    assert status_field in status_type.group(1), f"missing status field {status_field}"
+    assert status_field not in validation_type.group(1), f"status field leaked into validation: {status_field}"
 assert "unlinkSync(destination)" not in file_store
 assert "boot-candidate.tmp" in file_store and "flash-candidate.tmp" in file_store
 assert "activeProfile" in file_store and "profiles/${this.activeProfileId}" in file_store
@@ -58,6 +66,11 @@ for native_api in ("sendFile", "exitPressToTest", "configureDebugger", "enterDeb
                    "sendDebuggerCommand", "getDebugLog"):
     assert f'{{"{native_api}"' in napi_source, f"missing NAPI export {native_api}"
     assert f"export const {native_api}" in native_types, f"missing native declaration {native_api}"
+
+stop_body = re.search(r"bool EmulatorService::Stop\(std::string &error\)(.*?)\n\}",
+                      emulator_service, re.S)
+assert stop_body is not None
+assert "error = status_.error" not in stop_body.group(1), "stop must remain usable after a core error"
 
 for relative in (
     "firebird-harmony/AppScope/app.json5",

@@ -10,12 +10,13 @@
 
 namespace {
 constexpr uint32_t HARMONY_MAGIC = 0x53484246; // "FBHS" little endian
-constexpr uint32_t HARMONY_VERSION = 4;
+constexpr uint32_t HARMONY_VERSION = 5;
+constexpr uint32_t HARMONY_VERSION_V4 = 4;
 constexpr uint32_t CORE_MAGIC = 0xCAFEBEE0;
 constexpr uint32_t CORE_VERSION = 3;
 
 #pragma pack(push, 1)
-struct HarmonyHeader {
+struct HarmonyHeaderV4 {
     uint32_t magic;
     uint32_t version;
     uint32_t headerSize;
@@ -23,6 +24,19 @@ struct HarmonyHeader {
     uint64_t bootFingerprint;
     uint64_t flashFingerprint;
     uint64_t payloadSize;
+    char bootId[24];
+    char flashId[24];
+};
+
+struct HarmonyHeader {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t headerSize;
+    uint32_t product;
+    uint64_t bootFingerprint;
+    uint64_t flashFingerprint;
+    uint64_t corePayloadSize;
+    uint64_t flashPayloadSize;
     char bootId[24];
     char flashId[24];
 };
@@ -71,6 +85,35 @@ bool CopyBytes(std::istream &input, std::ostream &output, uint64_t bytes, std::s
     }
     return true;
 }
+
+uint64_t FingerprintBytes(std::istream &input, uint64_t bytes, std::ostream *output,
+                          std::string &error)
+{
+    uint64_t hash = 1469598103934665603ull;
+    std::array<char, 64 * 1024> buffer {};
+    while (bytes > 0) {
+        const std::streamsize requested = static_cast<std::streamsize>(
+            std::min<uint64_t>(bytes, buffer.size()));
+        input.read(buffer.data(), requested);
+        if (input.gcount() != requested) {
+            error = "Embedded flash payload is truncated";
+            return 0;
+        }
+        for (std::streamsize i = 0; i < requested; ++i) {
+            hash ^= static_cast<unsigned char>(buffer[static_cast<size_t>(i)]);
+            hash *= 1099511628211ull;
+        }
+        if (output) {
+            output->write(buffer.data(), requested);
+            if (!*output) {
+                error = "Could not write restored flash image";
+                return 0;
+            }
+        }
+        bytes -= static_cast<uint64_t>(requested);
+    }
+    return hash;
+}
 }
 
 uint64_t FingerprintFile(const std::string &path, std::string &error)
@@ -113,24 +156,47 @@ SnapshotInfo InspectSnapshot(const std::string &path)
     }
     input.seekg(0);
     if (magic == HARMONY_MAGIC) {
-        HarmonyHeader header {};
-        input.read(reinterpret_cast<char *>(&header), sizeof(header));
-        if (!input || header.version != HARMONY_VERSION || header.headerSize != sizeof(header)) {
+        uint32_t prefix[3] {};
+        input.read(reinterpret_cast<char *>(prefix), sizeof(prefix));
+        input.seekg(0);
+        uint64_t headerSize = 0;
+        if (prefix[1] == HARMONY_VERSION_V4 && prefix[2] == sizeof(HarmonyHeaderV4)) {
+            HarmonyHeaderV4 header {};
+            input.read(reinterpret_cast<char *>(&header), sizeof(header));
+            result.version = header.version;
+            result.product = header.product;
+            result.bootFingerprint = header.bootFingerprint;
+            result.flashFingerprint = header.flashFingerprint;
+            result.corePayloadSize = header.payloadSize;
+            headerSize = sizeof(header);
+        } else if (prefix[1] == HARMONY_VERSION && prefix[2] == sizeof(HarmonyHeader)) {
+            HarmonyHeader header {};
+            input.read(reinterpret_cast<char *>(&header), sizeof(header));
+            result.version = header.version;
+            result.product = header.product;
+            result.bootFingerprint = header.bootFingerprint;
+            result.flashFingerprint = header.flashFingerprint;
+            result.corePayloadSize = header.corePayloadSize;
+            result.flashPayloadSize = header.flashPayloadSize;
+            result.embeddedFlash = header.flashPayloadSize != 0;
+            headerSize = sizeof(header);
+        } else {
+            result.error = "Unsupported or damaged Harmony snapshot header";
+            return result;
+        }
+        if (!input || !result.corePayloadSize ||
+            (result.version == HARMONY_VERSION && !result.embeddedFlash)) {
             result.error = "Unsupported or damaged Harmony snapshot header";
             return result;
         }
         std::error_code ec;
         const uint64_t fileSize = std::filesystem::file_size(path, ec);
-        if (ec || fileSize != sizeof(header) + header.payloadSize) {
+        if (ec || fileSize != headerSize + result.corePayloadSize + result.flashPayloadSize) {
             result.error = "Harmony snapshot payload length does not match its header";
             return result;
         }
         result.valid = true;
         result.harmonyFormat = true;
-        result.version = header.version;
-        result.product = header.product;
-        result.bootFingerprint = header.bootFingerprint;
-        result.flashFingerprint = header.flashFingerprint;
         return result;
     }
 
@@ -195,15 +261,22 @@ bool WrapHarmonySnapshot(const std::string &coreSnapshotPath, const std::string 
     header.product = product;
     header.bootFingerprint = bootFingerprint;
     header.flashFingerprint = flashFingerprint;
-    header.payloadSize = payloadSize;
+    header.corePayloadSize = payloadSize;
+    header.flashPayloadSize = std::filesystem::file_size(flashPath, ec);
+    if (ec || header.flashPayloadSize == 0) {
+        error = "Could not determine flash image size";
+        return false;
+    }
     std::strncpy(header.bootId, "images/boot1.rom", sizeof(header.bootId) - 1);
     std::strncpy(header.flashId, "images/flash.img", sizeof(header.flashId) - 1);
 
     const std::string temporary = destinationPath + ".tmp";
     std::ifstream input(coreSnapshotPath, std::ios::binary);
+    std::ifstream flashInput(flashPath, std::ios::binary);
     std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
     output.write(reinterpret_cast<const char *>(&header), sizeof(header));
-    if (!input || !output || !CopyBytes(input, output, payloadSize, error)) {
+    if (!input || !flashInput || !output || !CopyBytes(input, output, payloadSize, error) ||
+        !CopyBytes(flashInput, output, header.flashPayloadSize, error)) {
         output.close();
         std::filesystem::remove(temporary, ec);
         if (error.empty()) error = "Could not create Harmony snapshot";
@@ -234,10 +307,11 @@ bool UnwrapHarmonySnapshot(const std::string &sourcePath, const std::string &cor
         return false;
     }
     std::ifstream input(sourcePath, std::ios::binary);
-    HarmonyHeader header {};
-    input.read(reinterpret_cast<char *>(&header), sizeof(header));
+    const uint64_t headerSize = info.version == HARMONY_VERSION ?
+                                sizeof(HarmonyHeader) : sizeof(HarmonyHeaderV4);
+    input.seekg(static_cast<std::streamoff>(headerSize));
     std::ofstream output(coreSnapshotPath, std::ios::binary | std::ios::trunc);
-    if (!input || !output || !CopyBytes(input, output, header.payloadSize, error)) {
+    if (!input || !output || !CopyBytes(input, output, info.corePayloadSize, error)) {
         std::error_code ec;
         output.close();
         std::filesystem::remove(coreSnapshotPath, ec);
@@ -245,4 +319,52 @@ bool UnwrapHarmonySnapshot(const std::string &sourcePath, const std::string &cor
     }
     output.flush();
     return static_cast<bool>(output);
+}
+
+bool ValidateEmbeddedFlash(const std::string &sourcePath, std::string &error)
+{
+    const SnapshotInfo info = InspectSnapshot(sourcePath);
+    if (!info.valid || !info.embeddedFlash) {
+        error = info.error.empty() ? "Snapshot has no embedded flash image" : info.error;
+        return false;
+    }
+    std::ifstream input(sourcePath, std::ios::binary);
+    input.seekg(static_cast<std::streamoff>(sizeof(HarmonyHeader) + info.corePayloadSize));
+    const uint64_t fingerprint = FingerprintBytes(input, info.flashPayloadSize, nullptr, error);
+    if (!error.empty()) return false;
+    if (fingerprint != info.flashFingerprint) {
+        error = "Embedded flash fingerprint does not match snapshot header";
+        return false;
+    }
+    return true;
+}
+
+bool RestoreEmbeddedFlash(const std::string &sourcePath, const std::string &flashPath,
+                          std::string &error)
+{
+    const SnapshotInfo info = InspectSnapshot(sourcePath);
+    if (!info.valid || !info.embeddedFlash) {
+        error = info.error.empty() ? "Snapshot has no embedded flash image" : info.error;
+        return false;
+    }
+    const std::string temporary = flashPath + ".snapshot.tmp";
+    std::ifstream input(sourcePath, std::ios::binary);
+    input.seekg(static_cast<std::streamoff>(sizeof(HarmonyHeader) + info.corePayloadSize));
+    std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+    const uint64_t fingerprint = FingerprintBytes(input, info.flashPayloadSize, &output, error);
+    output.flush();
+    output.close();
+    std::error_code ec;
+    if (!error.empty() || fingerprint != info.flashFingerprint || !output) {
+        if (error.empty()) error = "Embedded flash fingerprint does not match snapshot header";
+        std::filesystem::remove(temporary, ec);
+        return false;
+    }
+    std::filesystem::rename(temporary, flashPath, ec);
+    if (ec) {
+        error = "Could not atomically restore snapshot flash image";
+        std::filesystem::remove(temporary, ec);
+        return false;
+    }
+    return true;
 }

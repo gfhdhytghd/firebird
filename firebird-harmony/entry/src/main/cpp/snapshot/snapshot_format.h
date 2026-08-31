@@ -10,6 +10,9 @@ struct SnapshotInfo {
     uint32_t product = 0;
     uint64_t bootFingerprint = 0;
     uint64_t flashFingerprint = 0;
+    uint64_t corePayloadSize = 0;
+    uint64_t flashPayloadSize = 0;
+    bool embeddedFlash = false;
     std::string error;
 };
 
@@ -20,3 +23,6 @@ bool WrapHarmonySnapshot(const std::string &coreSnapshotPath, const std::string 
                          const std::string &flashPath, std::string &error);
 bool UnwrapHarmonySnapshot(const std::string &sourcePath, const std::string &coreSnapshotPath,
                            std::string &error);
+bool ValidateEmbeddedFlash(const std::string &sourcePath, std::string &error);
+bool RestoreEmbeddedFlash(const std::string &sourcePath, const std::string &flashPath,
+                          std::string &error);

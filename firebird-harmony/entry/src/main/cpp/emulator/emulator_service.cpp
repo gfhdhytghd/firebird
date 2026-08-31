@@ -143,11 +143,14 @@ bool EmulatorService::Start(const std::string &snapshotPath, std::string &error)
         lock.lock();
     }
     std::string coreSnapshot = snapshotPath;
+    const std::string configuredFlash = flashPath_;
     if (!snapshotPath.empty()) {
         lock.unlock();
         if (!ValidateSnapshotForCurrentFiles(snapshotPath, error))
             return false;
         SnapshotInfo info = InspectSnapshot(snapshotPath);
+        if (info.embeddedFlash && !RestoreEmbeddedFlash(snapshotPath, configuredFlash, error))
+            return false;
         if (info.harmonyFormat) {
             coreSnapshot = snapshotPath + ".core.resume.tmp";
             if (!UnwrapHarmonySnapshot(snapshotPath, coreSnapshot, error))
@@ -290,6 +293,7 @@ std::string EmulatorService::DebugLog() const
 
 bool EmulatorService::Stop(std::string &error)
 {
+    error.clear();
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!thread_.joinable())
@@ -299,9 +303,11 @@ bool EmulatorService::Stop(std::string &error)
     }
     condition_.notify_all();
     thread_.join();
-    std::lock_guard<std::mutex> lock(mutex_);
-    error = status_.error;
-    return error.empty();
+    // A prior core/JIT/flash error is part of EmulatorStatus, not a failure to
+    // stop the worker. Rejecting stop here made every recovery action that
+    // begins with stop() (profile switching, image replacement, JIT changes)
+    // unusable after the emulator entered the error state.
+    return true;
 }
 
 bool EmulatorService::SaveSnapshot(const std::string &path, std::string &error)
@@ -368,8 +374,13 @@ bool EmulatorService::ValidateSnapshotForCurrentFiles(const std::string &path, s
     }
     std::string fingerprintError;
     const uint64_t bootFingerprint = FingerprintFile(boot, fingerprintError);
-    const uint64_t flashFingerprint = FingerprintFile(flash, fingerprintError);
+    const uint64_t flashFingerprint = info.embeddedFlash ? info.flashFingerprint :
+                                      FingerprintFile(flash, fingerprintError);
     if (!fingerprintError.empty()) {
+        error = fingerprintError;
+        return false;
+    }
+    if (info.embeddedFlash && !ValidateEmbeddedFlash(path, fingerprintError)) {
         error = fingerprintError;
         return false;
     }

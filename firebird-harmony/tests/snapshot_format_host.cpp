@@ -25,6 +25,18 @@ struct LegacyNandMetrics {
     uint8_t padding[3] {};
     uint32_t pageCount = 0x10000;
 };
+
+struct HarmonyHeaderV4 {
+    uint32_t magic = 0x53484246;
+    uint32_t version = 4;
+    uint32_t headerSize = sizeof(HarmonyHeaderV4);
+    uint32_t product = 0x1C0;
+    uint64_t bootFingerprint = 1;
+    uint64_t flashFingerprint = 2;
+    uint64_t payloadSize = 0;
+    char bootId[24] {};
+    char flashId[24] {};
+};
 #pragma pack(pop)
 }
 
@@ -58,12 +70,41 @@ int main()
     assert(WrapHarmonySnapshot(core.string(), wrapped.string(), 0x1C0,
                                boot.string(), flash.string(), error));
     SnapshotInfo info = InspectSnapshot(wrapped.string());
-    assert(info.valid && info.harmonyFormat && info.version == 4 && info.product == 0x1C0);
+    assert(info.valid && info.harmonyFormat && info.version == 5 && info.product == 0x1C0);
     assert(info.bootFingerprint != 0 && info.flashFingerprint != 0);
+    assert(info.embeddedFlash && info.flashPayloadSize == 5);
+    assert(ValidateEmbeddedFlash(wrapped.string(), error));
 
     const auto restored = root / "restored.snapshot";
     assert(UnwrapHarmonySnapshot(wrapped.string(), restored.string(), error));
     assert(std::filesystem::file_size(core) == std::filesystem::file_size(restored));
+
+    const auto restoredFlash = root / "restored.flash";
+    assert(RestoreEmbeddedFlash(wrapped.string(), restoredFlash.string(), error));
+    assert(FingerprintFile(restoredFlash.string(), error) == info.flashFingerprint);
+
+    const auto legacyWrapper = root / "legacy-v4.fbhs";
+    HarmonyHeaderV4 legacyHeader;
+    legacyHeader.payloadSize = std::filesystem::file_size(core);
+    std::ofstream legacyOutput(legacyWrapper, std::ios::binary);
+    legacyOutput.write(reinterpret_cast<const char *>(&legacyHeader), sizeof(legacyHeader));
+    std::ifstream coreInput(core, std::ios::binary);
+    legacyOutput << coreInput.rdbuf();
+    legacyOutput.close();
+    SnapshotInfo legacyInfo = InspectSnapshot(legacyWrapper.string());
+    assert(legacyInfo.valid && legacyInfo.harmonyFormat && legacyInfo.version == 4);
+    assert(!legacyInfo.embeddedFlash && legacyInfo.corePayloadSize == legacyHeader.payloadSize);
+
+    const auto corrupt = root / "corrupt.fbhs";
+    std::filesystem::copy_file(wrapped, corrupt);
+    std::fstream corruptStream(corrupt, std::ios::binary | std::ios::in | std::ios::out);
+    corruptStream.seekp(-1, std::ios::end);
+    const char damaged = '\0';
+    corruptStream.write(&damaged, 1);
+    corruptStream.close();
+    error.clear();
+    assert(!ValidateEmbeddedFlash(corrupt.string(), error));
+    assert(error.find("fingerprint") != std::string::npos);
 
     const auto wrongGeometry = root / "wrong-geometry.snapshot";
     output = gzopen(wrongGeometry.c_str(), "wb");

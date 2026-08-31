@@ -107,12 +107,15 @@ Backgrounding pauses the emulator and atomically updates
 autosave; returning to the same process resumes the paused core. Restart always
 performs a boot+flash cold start.
 
-Harmony snapshots use the `FBHS` wrapper. It contains product and boot/flash
-fingerprints plus a Firebird v3 payload, but no source paths. Named snapshots
-can be saved, loaded, renamed, deleted, imported, and exported. Desktop v3
-snapshots are accepted after structural validation and are rebound to the
-current sandbox files; because v3 contains no trustworthy image fingerprint,
-the user must select the matching boot/flash pair.
+Harmony snapshots use the self-contained `FBHS` v5 wrapper. It contains the
+product, boot/flash fingerprints, a Firebird v3 core payload, and the complete
+Flash base image needed by that payload, but no source paths. A CX II snapshot
+therefore uses at least 132 MiB before the usually much smaller core payload.
+Named snapshots can be saved, loaded, renamed, deleted, imported, and exported.
+Older `FBHS` v4 wrappers remain readable when their current Flash fingerprint
+still matches. Desktop v3 snapshots are accepted after structural validation
+and are rebound to the current sandbox files; because v3 contains no trustworthy
+image fingerprint, the user must select the matching boot/flash pair.
 
 ## Sideload and device checks
 
