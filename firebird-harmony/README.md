@@ -68,8 +68,10 @@ make -C headless -j4
 
 ## ROM and flash import
 
-The app never embeds or references a developer's absolute file paths. Use the
-left settings drawer to import:
+The app never embeds or references a developer's absolute file paths. Swipe
+right within the LCD row to open the mobile action drawer, then choose
+**Configuration** to enter the separate full-screen configuration tabs and
+import:
 
 - a complete 524,288-byte CX II boot ROM;
 - a writable 138,412,032-byte CX II/CX II CAS flash image.

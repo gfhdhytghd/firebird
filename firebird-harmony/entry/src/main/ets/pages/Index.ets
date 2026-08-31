@@ -4,6 +4,7 @@ import { EmulatorStatus, ValidationResult } from 'libfirebird_harmony.so';
 import { FileStore, StoredConfiguration } from '../bridge/FileStore';
 import { PhysicalKeyMap } from '../bridge/PhysicalKeyMap';
 import { CalculatorKeypad } from '../components/CalculatorKeypad';
+import { MobileDrawer } from '../components/MobileDrawer';
 import { SettingsDrawer } from '../components/SettingsDrawer';
 
 const EMPTY_STATUS: EmulatorStatus = {
@@ -18,7 +19,8 @@ const EMPTY_STATUS: EmulatorStatus = {
 @Component
 struct Index {
   @StorageLink('firebirdTopInsetPx') private topInsetPx: number = 0;
-  @State private drawerOpen: boolean = false;
+  // Mobile Firebird navigation order: Configuration <- Drawer <- Emulator.
+  @State private mobilePage: number = 0;
   @State private landscape: boolean = false;
   @State private jitEnabled: boolean = true;
   @State private status: EmulatorStatus = EMPTY_STATUS;
@@ -79,6 +81,21 @@ struct Index {
     return event.touches.find((point: TouchObject): boolean => point.id === this.drawerPointer);
   }
 
+  private handleDrawerSwipe(event: TouchEvent): void {
+    if (event.type === TouchType.Down && this.drawerPointer < 0 && event.changedTouches.length > 0) {
+      this.drawerPointer = event.changedTouches[0].id;
+      this.drawerOriginX = event.changedTouches[0].x;
+    } else if (event.type === TouchType.Move && this.drawerPointer >= 0) {
+      const point = this.drawerPoint(event);
+      if (point !== undefined && point.x - this.drawerOriginX > 48) {
+        this.mobilePage = 1;
+        this.drawerPointer = -1;
+      }
+    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      this.drawerPointer = -1;
+    }
+  }
+
   private cycleSpeedLimit(): void {
     if (this.speedLimitMode === 1) {
       this.speedLimitMode = 2;
@@ -95,27 +112,13 @@ struct Index {
   @Builder
   private drawerHandle() {
     Row() {
-      Text('›').fontColor(Color.White).fontSize(24)
+      Text('S\nW\nI\nP\nE').fontColor(Color.White).fontSize(8).lineHeight(10)
+        .textAlign(TextAlign.Center)
     }
     .width(18)
     .height('100%')
     .backgroundColor(Color.Black)
     .justifyContent(FlexAlign.Center)
-    .onClick(() => this.drawerOpen = true)
-    .onTouch((event: TouchEvent) => {
-      if (event.type === TouchType.Down && this.drawerPointer < 0 && event.changedTouches.length > 0) {
-        this.drawerPointer = event.changedTouches[0].id;
-        this.drawerOriginX = event.changedTouches[0].x;
-      } else if (event.type === TouchType.Move && this.drawerPointer >= 0) {
-        const point = this.drawerPoint(event);
-        if (point !== undefined && point.x - this.drawerOriginX > 10) {
-          this.drawerOpen = true;
-          this.drawerPointer = -1;
-        }
-      } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-        this.drawerPointer = -1;
-      }
-    })
   }
 
   @Builder
@@ -134,6 +137,7 @@ struct Index {
       }
       .width('100%')
       .aspectRatio(4 / 3)
+      .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
 
       CalculatorKeypad({
         speed: this.status.speed,
@@ -157,6 +161,7 @@ struct Index {
               libraryname: 'firebird_harmony' })
               .layoutWeight(1).height('100%').backgroundColor(Color.Black)
           }.layoutWeight(1).height('100%')
+            .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
           CalculatorKeypad({
             speed: this.status.speed,
             speedLimitMode: this.speedLimitMode,
@@ -167,18 +172,27 @@ struct Index {
         this.emulatorView()
       }
 
-      if (this.drawerOpen) {
+      if (this.mobilePage === 1) {
+        Row() {
+          MobileDrawer({
+            status: $status,
+            fileStore: this.fileStore,
+            onOpenConfiguration: () => { this.mobilePage = 2; },
+            onClose: () => { this.mobilePage = 0; }
+          }).width('62%')
+          Blank()
+            .backgroundColor('#66000000')
+            .onClick(() => this.mobilePage = 0)
+        }.width('100%').height('100%')
+      } else if (this.mobilePage === 2) {
         Row() {
           SettingsDrawer({
             status: $status,
             jitEnabled: $jitEnabled,
             fileStore: this.fileStore,
             onFilesChanged: async () => { await this.configureFiles(); },
-            onClose: () => { this.drawerOpen = false; }
-          }).width('84%')
-          Blank()
-            .backgroundColor('#66000000')
-            .onClick(() => this.drawerOpen = false)
+            onClose: () => { this.mobilePage = 1; }
+          }).width('100%')
         }.width('100%').height('100%')
       }
     }

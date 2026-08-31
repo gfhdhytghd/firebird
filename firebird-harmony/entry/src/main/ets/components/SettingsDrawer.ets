@@ -363,11 +363,12 @@ export struct SettingsDrawer {
   build() {
     Column() {
       Row() {
+        Button('‹ Menu').fontSize(13).fontColor(ACTIVE).backgroundColor(Color.Transparent)
+          .onClick(() => this.onClose())
         Column({ space: 1 }) {
-          Text('FIREBIRD').fontSize(22).fontWeight(FontWeight.Bold).fontColor(Color.White)
+          Text('Configuration').fontSize(20).fontWeight(FontWeight.Bold).fontColor(Color.White)
           Text(this.fileStore.getActiveProfileName()).fontSize(11).fontColor(ACTIVE)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('×').fontSize(20).backgroundColor(Color.Transparent).onClick(() => this.onClose())
+        }.alignItems(HorizontalAlign.End).layoutWeight(1)
       }.width('100%').padding({ left: 14, right: 8, top: 12, bottom: 6 })
       Row() {
         this.tabButton('Config', 0); this.tabButton('Emulator', 1)

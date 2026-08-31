@@ -12,6 +12,7 @@ index_page = (ROOT / "firebird-harmony/entry/src/main/ets/pages/Index.ets").read
 entry_ability = (ROOT / "firebird-harmony/entry/src/main/ets/entryability/EntryAbility.ets").read_text()
 native_types = (ROOT / "firebird-harmony/entry/src/main/cpp/types/libfirebird_harmony/Index.d.ts").read_text()
 settings_drawer = (ROOT / "firebird-harmony/entry/src/main/ets/components/SettingsDrawer.ets").read_text()
+mobile_drawer = (ROOT / "firebird-harmony/entry/src/main/ets/components/MobileDrawer.ets").read_text()
 napi_source = (ROOT / "firebird-harmony/entry/src/main/cpp/napi/napi_init.cpp").read_text()
 emulator_service = (ROOT / "firebird-harmony/entry/src/main/cpp/emulator/emulator_service.cpp").read_text()
 ids = {int(value) for value in re.findall(r"(?:id|keyId|leftId|rightId):\s*(\d+)", keypad)}
@@ -48,6 +49,14 @@ assert "setTouchpadState(0.5, 0.5, true, false)" in physical
 assert "firebirdTopInsetPx" in entry_ability and "getWindowAvoidArea" in entry_ability
 assert "px2vp(this.topInsetPx)" in index_page
 assert "setSpeedLimit(2)" in index_page and "setSpeedLimit(0)" in index_page
+assert ".onClick(() => this.drawerOpen = true)" not in index_page
+assert "point.x - this.drawerOriginX > 48" in index_page
+assert index_page.count("this.handleDrawerSwipe(event)") == 2
+assert ".width(18)" in index_page
+assert "this.mobilePage = 1" in index_page and "this.mobilePage = 2" in index_page
+for action in ("Start", "Reset", "Resume", "Save", "Configuration"):
+    assert f"'{action}'" in mobile_drawer, f"missing mobile drawer action {action}"
+assert "this.tabButton('Config'" not in mobile_drawer
 assert "setSpeedLimit: (limit: 1 | 2 | 0)" in native_types
 validation_type = re.search(r"export interface ValidationResult \{(.*?)\n\}", native_types, re.S)
 status_type = re.search(r"export interface EmulatorStatus \{(.*?)\n\}", native_types, re.S)
