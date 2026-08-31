@@ -55,7 +55,17 @@ struct Index {
   }
 
   aboutToDisappear(): void {
+    this.releaseAllInputs();
+  }
+
+  private releaseAllInputs(): void {
     this.physicalKeys.releaseAll();
+    firebird.releaseAllInputs();
+  }
+
+  private showMobilePage(page: number): void {
+    this.releaseAllInputs();
+    this.mobilePage = page;
   }
 
   private async configureFiles(): Promise<void> {
@@ -97,7 +107,7 @@ struct Index {
       this.drawerPointer = -1;
       this.drawerTriggered = false;
       if (openDrawer) {
-        this.mobilePage = 1;
+        this.showMobilePage(1);
       }
     } else if (event.type === TouchType.Cancel) {
       this.drawerPointer = -1;
@@ -196,12 +206,12 @@ struct Index {
           MobileDrawer({
             status: $status,
             fileStore: this.fileStore,
-            onOpenConfiguration: () => { this.mobilePage = 2; },
-            onClose: () => { this.mobilePage = 0; }
+            onOpenConfiguration: () => { this.showMobilePage(2); },
+            onClose: () => { this.showMobilePage(0); }
           }).width('62%')
           Blank()
             .backgroundColor('#66000000')
-            .onClick(() => this.mobilePage = 0)
+            .onClick(() => this.showMobilePage(0))
         }.width('100%').height('100%')
       } else if (this.mobilePage === 2) {
         Row() {
@@ -210,7 +220,7 @@ struct Index {
             jitEnabled: $jitEnabled,
             fileStore: this.fileStore,
             onFilesChanged: async () => { await this.configureFiles(); },
-            onClose: () => { this.mobilePage = 1; }
+            onClose: () => { this.showMobilePage(1); }
           }).width('100%')
         }.width('100%').height('100%')
       }
@@ -221,7 +231,7 @@ struct Index {
     .backgroundColor(Color.Black)
     .focusable(true)
     .defaultFocus(true)
-    .onBlur(() => this.physicalKeys.releaseAll())
+    .onBlur(() => this.releaseAllInputs())
     .onKeyEvent((event: KeyEvent) => this.physicalKeys.handle(event))
     .onAreaChange((_oldArea: Area, newArea: Area) => {
       this.viewWidth = Number(newArea.width);
