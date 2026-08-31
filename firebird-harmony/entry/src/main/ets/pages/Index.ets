@@ -114,6 +114,7 @@ struct Index {
     .backgroundColor(Color.Black)
     .focusable(true)
     .defaultFocus(true)
+    .onBlur(() => this.physicalKeys.releaseAll())
     .onKeyEvent((event: KeyEvent) => this.physicalKeys.handle(event))
     .onAreaChange((_oldArea: Area, newArea: Area) => {
       this.landscape = Number(newArea.width) > Number(newArea.height);

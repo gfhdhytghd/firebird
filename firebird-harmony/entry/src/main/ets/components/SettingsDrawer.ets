@@ -1,6 +1,5 @@
 import * as firebird from 'libfirebird_harmony.so';
 import { EmulatorStatus, SnapshotInfo, ValidationResult } from 'libfirebird_harmony.so';
-import { promptAction } from '@kit.ArkUI';
 import { FileStore } from '../bridge/FileStore';
 
 @Component
@@ -15,7 +14,7 @@ export struct SettingsDrawer {
   aboutToAppear(): void { this.refreshSnapshots(); }
 
   private toast(message: string): void {
-    promptAction.showToast({ message: message });
+    this.getUIContext().getPromptAction().showToast({ message: message });
   }
 
   private refreshSnapshots(): void {

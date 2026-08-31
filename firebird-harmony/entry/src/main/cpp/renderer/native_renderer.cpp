@@ -14,6 +14,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "../emulator/emulator_service.h"
+
 namespace {
 void OnSurfaceCreated(OH_NativeXComponent *component, void *window)
 {
@@ -37,6 +39,7 @@ void OnSurfaceChanged(OH_NativeXComponent *component, void *window)
 
 void OnSurfaceDestroyed(OH_NativeXComponent *, void *window)
 {
+    EmulatorService::Instance().ReleaseAllInputs();
     NativeRenderer::Instance().DestroySurface(static_cast<OHNativeWindow *>(window));
 }
 

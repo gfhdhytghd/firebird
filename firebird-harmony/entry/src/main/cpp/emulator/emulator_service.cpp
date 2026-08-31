@@ -72,6 +72,10 @@ FileValidation EmulatorService::Configure(std::string bootPath, std::string flas
 {
     FileValidation validation = ValidateFiles(bootPath, flashPath);
     std::unique_lock<std::mutex> lock(mutex_);
+    if (thread_.joinable() && status_.state != "stopped" && status_.state != "error") {
+        validation.valid = false;
+        validation.error = "Stop the emulator before changing boot, flash, or JIT configuration";
+    }
     if (!validation.valid) {
         status_.error = validation.error;
         status_.state = "error";
@@ -141,10 +145,18 @@ bool EmulatorService::Start(const std::string &snapshotPath, std::string &error)
     }
     stopRequested_ = false;
     paused_ = false;
+    startupFinished_ = false;
+    startupSucceeded_ = false;
     status_.state = "starting";
     status_.error.clear();
     thread_ = std::thread(&EmulatorService::ThreadMain, this, coreSnapshot);
-    return true;
+    condition_.wait(lock, [this] { return startupFinished_; });
+    if (startupSucceeded_)
+        return true;
+    error = status_.error.empty() ? "Firebird core startup failed" : status_.error;
+    lock.unlock();
+    thread_.join();
+    return false;
 }
 
 void EmulatorService::Pause()
@@ -427,6 +439,9 @@ void EmulatorService::ThreadMain(std::string snapshotPath)
             status_.state = "running";
         }
         status_.jitInitialized = started && jit && translate_is_initialized();
+        startupSucceeded_ = started;
+        startupFinished_ = true;
+        condition_.notify_all();
         startupNotifier = statusNotifier_;
     }
     if (startupNotifier) startupNotifier();

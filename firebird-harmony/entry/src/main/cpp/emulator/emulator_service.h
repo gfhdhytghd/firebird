@@ -83,6 +83,8 @@ private:
     bool configured_ = false;
     bool paused_ = false;
     bool stopRequested_ = false;
+    bool startupFinished_ = false;
+    bool startupSucceeded_ = false;
     std::deque<InputCommand> inputQueue_;
     std::array<bool, 88> pressedKeys_{};
 

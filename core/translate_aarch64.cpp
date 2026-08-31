@@ -835,10 +835,10 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 	next_translation_index += 1;
 	jit_translated_blocks += 1;
 
-	// Flush the instruction cache
+	// Publish generated instructions before sealing the cache RX.
+	os_flush_instruction_cache(jump_table_start[0], code_end);
 	if (!os_executable_set_executable(translate_buffer, INSN_BUFFER_SIZE))
 		error("Could not seal JIT cache executable");
-	os_flush_instruction_cache(jump_table_start[0], code_end);
 }
 
 static void _invalidate_translation(int index)

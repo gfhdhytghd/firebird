@@ -61,8 +61,8 @@ export class PhysicalKeyMap {
   private submitArrowState(): void {
     const active = Array.from(this.arrows.values()).pop();
     if (active === undefined) firebird.setTouchpadState(0.5, 0.5, false, false);
-    else if (active === KeyCode.KEYCODE_DPAD_UP) firebird.setTouchpadState(0.5, 1.0, true, true);
-    else if (active === KeyCode.KEYCODE_DPAD_DOWN) firebird.setTouchpadState(0.5, 0.0, true, true);
+    else if (active === KeyCode.KEYCODE_DPAD_UP) firebird.setTouchpadState(0.5, 0.0, true, true);
+    else if (active === KeyCode.KEYCODE_DPAD_DOWN) firebird.setTouchpadState(0.5, 1.0, true, true);
     else if (active === KeyCode.KEYCODE_DPAD_LEFT) firebird.setTouchpadState(0.0, 0.5, true, true);
     else firebird.setTouchpadState(1.0, 0.5, true, true);
   }

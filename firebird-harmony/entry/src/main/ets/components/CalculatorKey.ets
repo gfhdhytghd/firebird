@@ -6,8 +6,10 @@ export struct CalculatorKey {
   @Prop label: string;
   @Prop accent: boolean = false;
   @State private pressed: boolean = false;
+  private activePointers: Set<number> = new Set();
 
   private release(): void {
+    this.activePointers.clear();
     if (!this.pressed) return;
     this.pressed = false;
     firebird.setKeyState(this.keyId, false);
@@ -24,10 +26,20 @@ export struct CalculatorKey {
       .height(34)
       .width('100%')
       .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down && !this.pressed) {
-          this.pressed = true;
-          firebird.setKeyState(this.keyId, true);
-        } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+        if (event.type === TouchType.Down) {
+          event.changedTouches.forEach((point: TouchObject): void => {
+            this.activePointers.add(point.id);
+          });
+          if (!this.pressed && this.activePointers.size > 0) {
+            this.pressed = true;
+            firebird.setKeyState(this.keyId, true);
+          }
+        } else if (event.type === TouchType.Up) {
+          event.changedTouches.forEach((point: TouchObject): void => {
+            this.activePointers.delete(point.id);
+          });
+          if (this.activePointers.size === 0) this.release();
+        } else if (event.type === TouchType.Cancel) {
           this.release();
         }
       })

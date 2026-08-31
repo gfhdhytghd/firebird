@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <filesystem>
 #include <string>
 
 #include <napi/native_api.h>
@@ -107,9 +108,29 @@ void ExecuteAsync(napi_env, void *opaque)
     case AsyncOperation::LoadSnapshot:
         context->success = service.ValidateSnapshotForCurrentFiles(context->path, context->error);
         if (context->success) {
+            const EmulatorStatus before = service.Status();
+            const bool needsRollback = before.state == "running" || before.state == "paused";
+            const std::string rollback = context->path + ".rollback.tmp";
+            if (needsRollback)
+                context->success = service.SaveSnapshot(rollback, context->error);
+            if (!context->success)
+                break;
             service.Stop(context->error);
             context->error.clear();
             context->success = service.Start(context->path, context->error);
+            if (!context->success && needsRollback) {
+                const std::string loadError = context->error;
+                context->error.clear();
+                if (!service.Start(rollback, context->error)) {
+                    context->error = loadError + "; rollback also failed: " + context->error;
+                } else {
+                    context->error = loadError;
+                }
+            }
+            if (needsRollback) {
+                std::error_code removeError;
+                std::filesystem::remove(rollback, removeError);
+            }
         }
         break;
     }
