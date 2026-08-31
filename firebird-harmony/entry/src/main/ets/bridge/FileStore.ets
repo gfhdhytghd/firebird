@@ -19,22 +19,27 @@ export class FileStore {
     this.ensureDirectories();
   }
 
+  updateContext(context: common.UIAbilityContext): void {
+    this.context = context;
+    this.root = `${context.filesDir}/firebird`;
+    this.ensureDirectories();
+  }
+
   bootPath(): string { return `${this.root}/images/boot1.rom`; }
   flashPath(): string { return `${this.root}/images/flash.img`; }
   autosavePath(): string { return `${this.root}/snapshots/autosave.snapshot`; }
   snapshotDirectory(): string { return `${this.root}/snapshots`; }
 
   async installBundledImagesIfPresent(): Promise<void> {
-    if (!this.exists(this.bootPath()))
-      this.copyBundledRawFile('private/boot1.rom', this.bootPath(), 0x80000);
-    if (!this.exists(this.flashPath()))
-      this.copyBundledRawFile('private/flash.img', this.flashPath(), 132 * 1024 * 1024);
+    if (!this.bootReady())
+      await this.copyBundledRawFile('firebird.boot1.rom', this.bootPath(), 0x80000);
+    if (!this.flashReady())
+      await this.copyBundledRawFile('firebird.flash.img', this.flashPath(), 132 * 1024 * 1024);
   }
 
   exists(path: string): boolean {
     try {
-      fs.accessSync(path);
-      return true;
+      return fs.accessSync(path);
     } catch (_) {
       return false;
     }
@@ -42,13 +47,14 @@ export class FileStore {
 
   bootReady(): boolean { return this.hasSize(this.bootPath(), 0x80000); }
   flashReady(): boolean { return this.hasSize(this.flashPath(), 132 * 1024 * 1024); }
-
+  bootCandidateReady(path: string): boolean { return this.hasSize(path, 0x80000); }
+  flashCandidateReady(path: string): boolean { return this.hasSize(path, 132 * 1024 * 1024); }
   async importBoot(): Promise<string> {
-    return this.importDocument(`${this.root}/images/boot-candidate.tmp`, ['.rom', '.bin', '.img']);
+    return this.importDocument(`${this.root}/images/boot-candidate.tmp`);
   }
 
   async importFlash(): Promise<string> {
-    return this.importDocument(`${this.root}/images/flash-candidate.tmp`, ['.img', '.bin', '.flash']);
+    return this.importDocument(`${this.root}/images/flash-candidate.tmp`);
   }
 
   commitBoot(candidate: string): void { this.commitCandidate(candidate, this.bootPath()); }
@@ -62,7 +68,7 @@ export class FileStore {
 
   async importSnapshot(): Promise<string> {
     const destination = `${this.snapshotDirectory()}/imported-${Date.now()}.snapshot`;
-    return this.importDocument(destination, ['.snapshot', '.snap', '.gz', '.fbhs']);
+    return this.importDocument(destination);
   }
 
   listSnapshots(): Array<string> {
@@ -130,14 +136,15 @@ export class FileStore {
 
   private ensureDirectories(): void {
     for (const directory of [this.root, `${this.root}/images`, this.snapshotDirectory()]) {
-      if (!this.exists(directory)) fs.mkdirSync(directory);
+      if (!this.exists(directory)) fs.mkdirSync(directory, true);
     }
   }
 
-  private copyBundledRawFile(resourceName: string, destination: string, expectedLength: number): void {
+  private async copyBundledRawFile(resourceName: string, destination: string,
+    expectedLength: number): Promise<void> {
     let descriptor: resourceManager.RawFileDescriptor;
     try {
-      descriptor = this.context.resourceManager.getRawFdSync(resourceName);
+      descriptor = await this.context.resourceManager.getRawFd(resourceName);
     } catch (_) {
       return; // Normal public builds deliberately contain no private images.
     }
@@ -146,23 +153,30 @@ export class FileStore {
       return;
     }
     const temporary = `${destination}.tmp`;
-    const output = fs.openSync(temporary, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
     try {
-      const buffer = new ArrayBuffer(1024 * 1024);
-      let copied: number = 0;
-      while (copied < descriptor.length) {
-        const amount = Math.min(buffer.byteLength, descriptor.length - copied);
-        const read = fs.readSync(descriptor.fd, buffer, {
-          offset: descriptor.offset + copied,
-          length: amount
-        });
-        if (read <= 0) throw new Error(`Bundled resource ${resourceName} is truncated`);
-        fs.writeSync(output.fd, buffer, { offset: copied, length: read });
-        copied += read;
+      const output = fs.openSync(temporary, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+      try {
+        const buffer = new ArrayBuffer(1024 * 1024);
+        let copied: number = 0;
+        while (copied < descriptor.length) {
+          const amount = Math.min(buffer.byteLength, descriptor.length - copied);
+          const read = fs.readSync(descriptor.fd, buffer, {
+            offset: descriptor.offset + copied,
+            length: amount
+          });
+          if (read <= 0) throw new Error(`Bundled resource ${resourceName} is truncated`);
+          const written = fs.writeSync(output.fd, buffer, { length: read });
+          if (written !== read)
+            throw new Error(`Bundled resource ${resourceName} could not be written completely`);
+          copied += written;
+        }
+        fs.renameSync(temporary, destination);
+      } finally {
+        fs.closeSync(output);
       }
-      fs.renameSync(temporary, destination);
+    } catch (_) {
+      // Leave the previous stable image untouched when a bundled copy fails.
     } finally {
-      fs.closeSync(output);
       this.context.resourceManager.closeRawFd(resourceName);
       if (this.exists(temporary)) fs.unlinkSync(temporary);
     }
@@ -177,12 +191,9 @@ export class FileStore {
     }
   }
 
-  private async importDocument(destination: string, suffixes: Array<string>): Promise<string> {
+  private async importDocument(destination: string): Promise<string> {
     const documentPicker = new picker.DocumentViewPicker(this.context);
-    const options = new picker.DocumentSelectOptions();
-    options.maxSelectNumber = 1;
-    options.fileSuffixFilters = suffixes;
-    const selected = await documentPicker.select(options);
+    const selected = await documentPicker.select();
     if (selected.length !== 1) throw new Error('No file selected');
 
     const temporary = `${destination}.tmp`;

@@ -23,6 +23,7 @@ struct Index {
   private physicalKeys: PhysicalKeyMap = new PhysicalKeyMap();
 
   async aboutToAppear(): Promise<void> {
+    this.fileStore.updateContext(this.getUIContext().getHostContext() as common.UIAbilityContext);
     firebird.subscribeStatus((status: EmulatorStatus): void => { this.status = status; });
     await this.fileStore.installBundledImagesIfPresent();
     const configuration = await this.fileStore.loadConfiguration();

@@ -36,8 +36,12 @@ export struct SettingsDrawer {
     const candidate = await this.fileStore.importBoot();
     let committed: boolean = false;
     try {
-      const validation: ValidationResult = await firebird.validateFiles(candidate, this.fileStore.flashPath());
-      if (!validation.valid) throw new Error(validation.error);
+      if (!this.fileStore.bootCandidateReady(candidate))
+        throw new Error('Boot ROM must be exactly 512 KiB');
+      if (this.fileStore.flashReady()) {
+        const validation: ValidationResult = await firebird.validateFiles(candidate, this.fileStore.flashPath());
+        if (!validation.valid) throw new Error(validation.error);
+      }
       await firebird.stop();
       this.fileStore.commitBoot(candidate);
       committed = true;
@@ -51,8 +55,12 @@ export struct SettingsDrawer {
     const candidate = await this.fileStore.importFlash();
     let committed: boolean = false;
     try {
-      const validation: ValidationResult = await firebird.validateFiles(this.fileStore.bootPath(), candidate);
-      if (!validation.valid) throw new Error(validation.error);
+      if (!this.fileStore.flashCandidateReady(candidate))
+        throw new Error('Flash image must be exactly 132 MiB');
+      if (this.fileStore.bootReady()) {
+        const validation: ValidationResult = await firebird.validateFiles(this.fileStore.bootPath(), candidate);
+        if (!validation.valid) throw new Error(validation.error);
+      }
       await firebird.stop();
       this.fileStore.commitFlash(candidate);
       committed = true;
@@ -63,7 +71,15 @@ export struct SettingsDrawer {
   }
 
   private async run(action: () => Promise<void>): Promise<void> {
-    try { await action(); } catch (error) { this.toast(`${error}`); }
+    try {
+      await action();
+    } catch (error) {
+      if (error instanceof Error) {
+        this.toast(error.message);
+      } else {
+        this.toast(JSON.stringify(error));
+      }
+    }
   }
 
   build() {

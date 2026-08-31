@@ -158,10 +158,17 @@ void NativeRenderer::DrawLocked()
     }
 
     auto *output = static_cast<uint32_t *>(mapping);
-    const uint32_t stride = static_cast<uint32_t>(handle->stride);
+    const uint32_t strideBytes = static_cast<uint32_t>(handle->stride);
     const uint32_t targetWidth = static_cast<uint32_t>(handle->width);
     const uint32_t targetHeight = static_cast<uint32_t>(handle->height);
-    std::fill_n(output, static_cast<size_t>(stride) * targetHeight, 0xFF000000u);
+    if (strideBytes < targetWidth * sizeof(uint32_t) ||
+        static_cast<size_t>(strideBytes) * targetHeight > static_cast<size_t>(handle->size)) {
+        munmap(mapping, handle->size);
+        OH_NativeWindow_NativeWindowAbortBuffer(window_, buffer);
+        return;
+    }
+    const uint32_t stridePixels = strideBytes / sizeof(uint32_t);
+    std::fill_n(output, static_cast<size_t>(handle->size) / sizeof(uint32_t), 0xFF000000u);
 
     const double scale = std::min(targetWidth / 320.0, targetHeight / 240.0);
     const uint32_t drawWidth = std::max(1u, static_cast<uint32_t>(320.0 * scale));
@@ -171,7 +178,7 @@ void NativeRenderer::DrawLocked()
 
     for (uint32_t y = 0; y < drawHeight; ++y) {
         const uint32_t sourceY = std::min(239u, y * 240u / drawHeight);
-        uint32_t *row = output + (offsetY + y) * stride + offsetX;
+        uint32_t *row = output + (offsetY + y) * stridePixels + offsetX;
         for (uint32_t x = 0; x < drawWidth; ++x) {
             const uint16_t rgb565 = frame_[sourceY * 320u + std::min(319u, x * 320u / drawWidth)];
             const uint32_t r = ((rgb565 >> 11) & 0x1F) * 255 / 31;
