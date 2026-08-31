@@ -25,6 +25,8 @@ void translate(uint32_t start_pc, uint32_t *insnp);
 void flush_translations();
 void invalidate_translation(int index);
 void translate_fix_pc();
+extern uint64_t jit_translated_blocks;
+extern uint64_t jit_execution_entries;
 
 #ifdef __cplusplus
 }

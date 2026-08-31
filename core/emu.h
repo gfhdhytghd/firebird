@@ -39,6 +39,7 @@ extern uint32_t cpu_events __asm__("cpu_events");
 extern bool exiting, debug_on_start, debug_on_warn, print_on_warn;
 extern BootOrder boot_order;
 extern bool do_translate;
+extern bool snapshot_use_current_paths;
 extern uint32_t product, features, asic_user_flags;
 
 #define FEATURE_CX 0x05
@@ -109,6 +110,7 @@ bool emu_start(unsigned int port_gdb, unsigned int port_rdbg, const char *snapsh
 void emu_loop(bool reset);
 bool emu_suspend(const char *file);
 void emu_cleanup();
+bool flash_save_changes();
 
 #ifdef __cplusplus
 }

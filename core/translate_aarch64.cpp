@@ -228,10 +228,10 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 		return;
 	}
 
-	#ifdef IS_IOS_BUILD
-		// Mark translate_buffer as RW_
-		mprotect(translate_buffer, INSN_BUFFER_SIZE, PROT_READ | PROT_WRITE);
-	#endif
+	// The whole code cache is single-writer. Open it for generation and seal it
+	// again before any generated instruction can execute.
+	if (!os_executable_set_writable(translate_buffer, INSN_BUFFER_SIZE))
+		error("Could not make JIT cache writable");
     
 	uint32_t **jump_table_start = jump_table_current;
 	uint32_t pc = pc_start, *insn_ptr = insn_ptr_start;
@@ -779,11 +779,9 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 
 	if(insn_ptr == insn_ptr_start)
 	{
-		#ifdef IS_IOS_BUILD
-			// Mark translate_buffer as R_X
-			// Even if no translation was done, pages got marked RW_
-			mprotect(translate_buffer, INSN_BUFFER_SIZE, PROT_READ | PROT_EXEC);
-		#endif
+		// Even if no code was emitted, do not leave the cache writable.
+		if (!os_executable_set_executable(translate_buffer, INSN_BUFFER_SIZE))
+			error("Could not seal JIT cache executable");
 
 		// No virtual instruction got translated, just drop everything
 		translate_current = translate_buffer_inst_start;
@@ -830,15 +828,12 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 	this_translation->unused = reinterpret_cast<uintptr_t>(translate_current);
 
 	next_translation_index += 1;
+	jit_translated_blocks += 1;
 
 	// Flush the instruction cache
-	#ifdef IS_IOS_BUILD
-		// Mark translate_buffer as R_X
-		mprotect(translate_buffer, INSN_BUFFER_SIZE, PROT_READ | PROT_EXEC);
-		sys_cache_control(1 /* kCacheFunctionPrepareForExecution */, jump_table_start[0], (code_end-jump_table_start[0])*4);
-	#else
-		__builtin___clear_cache((char*)jump_table_start[0], (char*)code_end);
-	#endif
+	if (!os_executable_set_executable(translate_buffer, INSN_BUFFER_SIZE))
+		error("Could not seal JIT cache executable");
+	os_flush_instruction_cache(jump_table_start[0], code_end);
 }
 
 static void _invalidate_translation(int index)

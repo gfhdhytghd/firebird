@@ -27,6 +27,9 @@ int cycle_count_delta = 0;
 uint32_t cpu_events;
 
 bool do_translate = true;
+bool snapshot_use_current_paths = false;
+uint64_t jit_translated_blocks = 0;
+uint64_t jit_execution_entries = 0;
 uint32_t product = 0x0E0, features = 0, asic_user_flags = 0;
 bool turbo_mode = false;
 
@@ -229,8 +232,18 @@ bool emu_start(unsigned int port_gdb, unsigned int port_rdbg, const char *snapsh
         sched.items[SCHED_THROTTLE].proc = throttle_interval_event;
 
         // TODO: Max length
-        path_boot1 = std::string(snapshot.header.path_boot1);
-        path_flash = std::string(snapshot.header.path_flash);
+        if(snapshot_use_current_paths)
+        {
+            memset(snapshot.header.path_boot1, 0, sizeof(snapshot.header.path_boot1));
+            memset(snapshot.header.path_flash, 0, sizeof(snapshot.header.path_flash));
+            strncpy(snapshot.header.path_boot1, path_boot1.c_str(), sizeof(snapshot.header.path_boot1) - 1);
+            strncpy(snapshot.header.path_flash, path_flash.c_str(), sizeof(snapshot.header.path_flash) - 1);
+        }
+        else
+        {
+            path_boot1 = std::string(snapshot.header.path_boot1);
+            path_flash = std::string(snapshot.header.path_flash);
+        }
 
         // Resume components
         uint32_t sdram_size, dummy;
@@ -296,10 +309,16 @@ bool emu_start(unsigned int port_gdb, unsigned int port_rdbg, const char *snapsh
         gui_debug_printf("Incomplete bootrom dump detected: Booting will fail.\nThere is currently no public way to perform a complete readout.\n");
 
 #ifndef NO_TRANSLATION
-    if(!translate_init())
+    if(do_translate && !translate_init())
     {
+#ifdef STRICT_JIT_INIT
+        gui_debug_printf("Could not initialize the requested JIT. Startup aborted.\n");
+        emu_cleanup();
+        return false;
+#else
         gui_debug_printf("Could not init JIT, disabling translation.\n");
         do_translate = false;
+#endif
     }
 #endif
 
