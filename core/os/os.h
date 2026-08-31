@@ -2,6 +2,7 @@
 #define OS_H
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -32,6 +33,13 @@ void androidVibrate();
 void *os_reserve(size_t size);
 void *os_alloc_executable(size_t size);
 void os_free(void *ptr, size_t size);
+
+/* W^X helpers used by the AArch64 translator. Implementations must never
+ * leave a code range writable and executable at the same time. */
+size_t os_page_size(void);
+bool os_executable_set_writable(void *ptr, size_t size);
+bool os_executable_set_executable(void *ptr, size_t size);
+void os_flush_instruction_cache(void *start, void *end);
 
 #if OS_HAS_PAGEFAULT_HANDLER
 // The Win32 mechanism to handle pagefaults uses SEH, which requires a linked

@@ -20,11 +20,14 @@ extern struct translation translation_table[] __asm__("translation_table");
 #define INSN_BUFFER_SIZE 0x1000000
 
 bool translate_init();
+bool translate_is_initialized();
 void translate_deinit();
 void translate(uint32_t start_pc, uint32_t *insnp);
 void flush_translations();
 void invalidate_translation(int index);
 void translate_fix_pc();
+extern uint64_t jit_translated_blocks;
+extern uint64_t jit_execution_entries;
 
 #ifdef __cplusplus
 }

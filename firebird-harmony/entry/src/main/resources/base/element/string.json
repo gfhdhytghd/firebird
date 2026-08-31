@@ -1,0 +1,6 @@
+{
+  "string": [
+    { "name": "app_name", "value": "Firebird" },
+    { "name": "module_desc", "value": "TI-Nspire emulator for HarmonyOS NEXT" }
+  ]
+}

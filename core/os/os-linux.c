@@ -88,6 +88,35 @@ void *os_alloc_executable(size_t size)
     return ptr;
 }
 
+size_t os_page_size(void)
+{
+    long value = sysconf(_SC_PAGE_SIZE);
+    return value > 0 ? (size_t)value : 4096u;
+}
+
+static bool os_protect_code(void *ptr, size_t size, int prot)
+{
+    size_t page = os_page_size();
+    uintptr_t begin = (uintptr_t)ptr & ~(page - 1u);
+    uintptr_t end = ((uintptr_t)ptr + size + page - 1u) & ~(page - 1u);
+    return mprotect((void *)begin, end - begin, prot) == 0;
+}
+
+bool os_executable_set_writable(void *ptr, size_t size)
+{
+    return os_protect_code(ptr, size, PROT_READ | PROT_WRITE);
+}
+
+bool os_executable_set_executable(void *ptr, size_t size)
+{
+    return os_protect_code(ptr, size, PROT_READ | PROT_EXEC);
+}
+
+void os_flush_instruction_cache(void *start, void *end)
+{
+    __builtin___clear_cache((char *)start, (char *)end);
+}
+
 void *os_map_cow(const char *filename, size_t size)
 {
     FILE *f = fopen_utf8(filename, "rb");

@@ -39,6 +39,7 @@ extern uint32_t cpu_events __asm__("cpu_events");
 extern bool exiting, debug_on_start, debug_on_warn, print_on_warn;
 extern BootOrder boot_order;
 extern bool do_translate;
+extern bool snapshot_use_current_paths;
 extern uint32_t product, features, asic_user_flags;
 
 #define FEATURE_CX 0x05
@@ -52,6 +53,7 @@ extern uint32_t product, features, asic_user_flags;
 #define emulate_cx (product >= 0x0F0)
 #define emulate_cx2 (product >= 0x1C0)
 extern bool turbo_mode;
+void emu_set_speed_limit(double limit);
 
 enum { LOG_CPU, LOG_IO, LOG_FLASH, LOG_INTS, LOG_ICOUNT, LOG_USB, LOG_GDB, MAX_LOG };
 #define LOG_TYPE_TBL "CIFQ#UG"
@@ -109,6 +111,7 @@ bool emu_start(unsigned int port_gdb, unsigned int port_rdbg, const char *snapsh
 void emu_loop(bool reset);
 bool emu_suspend(const char *file);
 void emu_cleanup();
+bool flash_save_changes();
 
 #ifdef __cplusplus
 }

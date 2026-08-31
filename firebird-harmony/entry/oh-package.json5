@@ -1,0 +1,12 @@
+{
+  "modelVersion": "5.0.0",
+  "name": "entry",
+  "version": "0.1.0",
+  "description": "Firebird HarmonyOS entry module",
+  "main": "",
+  "author": "Firebird contributors",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "libfirebird_harmony.so": "file:./src/main/cpp/types/libfirebird_harmony"
+  }
+}

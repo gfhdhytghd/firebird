@@ -73,6 +73,12 @@ uint32_t *translate_buffer = nullptr,
 #include "literalpool.h"
 
 #define MAX_TRANSLATIONS 0x40000
+// A translated ARM block contains at most 256 guest instructions. Keep a
+// bounded generation window writable instead of changing permissions on the
+// complete 16 MiB cache for every block. The headroom covers the block tail
+// and the largest possible literal pool before the window is sealed RX.
+static constexpr size_t JIT_WRITE_WINDOW_SIZE = 256 * 1024;
+static constexpr size_t JIT_WRITE_HEADROOM_WORDS = 4096;
 struct translation translation_table[MAX_TRANSLATIONS];
 uint32_t *jump_table[MAX_TRANSLATIONS*2],
          **jump_table_current = jump_table;
@@ -211,6 +217,11 @@ bool translate_init()
 	return translate_buffer != nullptr;
 }
 
+bool translate_is_initialized()
+{
+	return translate_buffer != nullptr;
+}
+
 void translate_deinit()
 {
 	if(!translate_buffer)
@@ -228,10 +239,32 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 		return;
 	}
 
-	#ifdef IS_IOS_BUILD
-		// Mark translate_buffer as RW_
-		mprotect(translate_buffer, INSN_BUFFER_SIZE, PROT_READ | PROT_WRITE);
-	#endif
+	// Translation runs on the emulator thread, so no generated code can execute
+	// while this bounded append-only window is writable. Previously this toggled
+	// all 16 MiB for every block, which is prohibitively expensive on HarmonyOS.
+	const size_t page_size = os_page_size();
+	const uintptr_t cache_end = reinterpret_cast<uintptr_t>(translate_buffer) + INSN_BUFFER_SIZE;
+	const uintptr_t current_address = reinterpret_cast<uintptr_t>(translate_current);
+	const uintptr_t writable_begin = current_address - current_address % page_size;
+	uintptr_t writable_end = writable_begin + JIT_WRITE_WINDOW_SIZE;
+	if (writable_end > cache_end)
+		writable_end = cache_end;
+	if (writable_end <= current_address + JIT_WRITE_HEADROOM_WORDS * sizeof(uint32_t))
+		error("AArch64 JIT code cache exhausted");
+	if (!os_executable_set_writable(reinterpret_cast<void *>(writable_begin),
+	                                writable_end - writable_begin))
+		error("Could not make JIT cache writable");
+	uint32_t *const writable_limit = reinterpret_cast<uint32_t *>(writable_end);
+	auto seal_generated_pages = [&]() {
+		uintptr_t used_end = reinterpret_cast<uintptr_t>(translate_current);
+		if (used_end <= current_address)
+			used_end = current_address + sizeof(uint32_t);
+		if (used_end > writable_end)
+			error("AArch64 JIT generation window overflow");
+		if (!os_executable_set_executable(reinterpret_cast<void *>(writable_begin),
+		                                  used_end - writable_begin))
+			error("Could not seal JIT cache executable");
+	};
     
 	uint32_t **jump_table_start = jump_table_current;
 	uint32_t pc = pc_start, *insn_ptr = insn_ptr_start;
@@ -255,7 +288,7 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 	{
 		// Translate further?
 		if(stop_here
-		   || size_t((translate_current + 16) - translate_buffer) > (INSN_BUFFER_SIZE/sizeof(*translate_buffer))
+		   || translate_current + JIT_WRITE_HEADROOM_WORDS >= writable_limit
 		   || RAM_FLAGS(insn_ptr) & DONT_TRANSLATE
 		   || (pc ^ pc_start) & ~0x3ff)
 			goto exit_translation;
@@ -779,14 +812,11 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 
 	if(insn_ptr == insn_ptr_start)
 	{
-		#ifdef IS_IOS_BUILD
-			// Mark translate_buffer as R_X
-			// Even if no translation was done, pages got marked RW_
-			mprotect(translate_buffer, INSN_BUFFER_SIZE, PROT_READ | PROT_EXEC);
-		#endif
-
 		// No virtual instruction got translated, just drop everything
 		translate_current = translate_buffer_inst_start;
+		// Even if no code was retained, restore the page containing any
+		// previously published code before returning to the dispatcher.
+		seal_generated_pages();
 		return;
 	}
 
@@ -830,15 +860,11 @@ void translate(uint32_t pc_start, uint32_t *insn_ptr_start)
 	this_translation->unused = reinterpret_cast<uintptr_t>(translate_current);
 
 	next_translation_index += 1;
+	jit_translated_blocks += 1;
 
-	// Flush the instruction cache
-	#ifdef IS_IOS_BUILD
-		// Mark translate_buffer as R_X
-		mprotect(translate_buffer, INSN_BUFFER_SIZE, PROT_READ | PROT_EXEC);
-		sys_cache_control(1 /* kCacheFunctionPrepareForExecution */, jump_table_start[0], (code_end-jump_table_start[0])*4);
-	#else
-		__builtin___clear_cache((char*)jump_table_start[0], (char*)code_end);
-	#endif
+	// Publish generated instructions before sealing the cache RX.
+	os_flush_instruction_cache(jump_table_start[0], code_end);
+	seal_generated_pages();
 }
 
 static void _invalidate_translation(int index)

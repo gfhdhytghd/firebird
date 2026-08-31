@@ -89,6 +89,7 @@ void cpu_arm_loop()
         // If the instruction is translated, use the translation
         if((~cpu_events & EVENT_DEBUG_STEP) && *flags_ptr & RF_CODE_TRANSLATED)
         {
+            ++jit_execution_entries;
             #if TRANSLATION_ENTER_HAS_PTR
                 translation_enter(p);
             #else

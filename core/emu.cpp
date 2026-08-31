@@ -27,8 +27,12 @@ int cycle_count_delta = 0;
 uint32_t cpu_events;
 
 bool do_translate = true;
+bool snapshot_use_current_paths = false;
+uint64_t jit_translated_blocks = 0;
+uint64_t jit_execution_entries = 0;
 uint32_t product = 0x0E0, features = 0, asic_user_flags = 0;
 bool turbo_mode = false;
+static double throttle_speed_limit = 1.0;
 
 bool exiting, debug_on_start, debug_on_warn, print_on_warn;
 BootOrder boot_order = ORDER_DEFAULT;
@@ -113,6 +117,14 @@ static auto last_throttle = std::chrono::steady_clock::now();
 // Calculate speed by summing up the elapsed virtual and real time and taking the ratio
 static std::chrono::microseconds real_time_elapsed_sum, virt_time_elapsed_sum;
 
+void emu_set_speed_limit(double limit)
+{
+    turbo_mode = limit <= 0.0;
+    throttle_speed_limit = limit > 0.0 ? limit : 1.0;
+    last_throttle = std::chrono::steady_clock::now();
+    real_time_elapsed_sum = virt_time_elapsed_sum = {};
+}
+
 void throttle_interval_event(int index)
 {
     /* Throttle interval (defined arbitrarily as 100Hz) - used for
@@ -136,7 +148,9 @@ void throttle_interval_event(int index)
 
     // Compute how much time elapsed since last_throttle
     auto real_interval = std::chrono::steady_clock::now() - last_throttle;
-    auto real_time_diff = virt_throttle_interval - real_interval;
+    const auto target_real_interval =
+        std::chrono::duration<double>(virt_throttle_interval) / throttle_speed_limit;
+    auto real_time_diff = target_real_interval - real_interval;
     auto real_time_left_us = std::chrono::duration_cast<std::chrono::microseconds>(real_time_diff).count();
     // If less than the virtual throttle interval elapsed, wait
     if(real_time_left_us > 0 && !turbo_mode)
@@ -229,8 +243,18 @@ bool emu_start(unsigned int port_gdb, unsigned int port_rdbg, const char *snapsh
         sched.items[SCHED_THROTTLE].proc = throttle_interval_event;
 
         // TODO: Max length
-        path_boot1 = std::string(snapshot.header.path_boot1);
-        path_flash = std::string(snapshot.header.path_flash);
+        if(snapshot_use_current_paths)
+        {
+            memset(snapshot.header.path_boot1, 0, sizeof(snapshot.header.path_boot1));
+            memset(snapshot.header.path_flash, 0, sizeof(snapshot.header.path_flash));
+            strncpy(snapshot.header.path_boot1, path_boot1.c_str(), sizeof(snapshot.header.path_boot1) - 1);
+            strncpy(snapshot.header.path_flash, path_flash.c_str(), sizeof(snapshot.header.path_flash) - 1);
+        }
+        else
+        {
+            path_boot1 = std::string(snapshot.header.path_boot1);
+            path_flash = std::string(snapshot.header.path_flash);
+        }
 
         // Resume components
         uint32_t sdram_size, dummy;
@@ -296,14 +320,25 @@ bool emu_start(unsigned int port_gdb, unsigned int port_rdbg, const char *snapsh
         gui_debug_printf("Incomplete bootrom dump detected: Booting will fail.\nThere is currently no public way to perform a complete readout.\n");
 
 #ifndef NO_TRANSLATION
-    if(!translate_init())
+    if(do_translate && !translate_init())
     {
+#ifdef STRICT_JIT_INIT
+        gui_debug_printf("Could not initialize the requested JIT. Startup aborted.\n");
+        emu_cleanup();
+        return false;
+#else
         gui_debug_printf("Could not init JIT, disabling translation.\n");
         do_translate = false;
+#endif
     }
 #endif
 
     addr_cache_init();
+    if (!addr_cache) {
+        gui_debug_printf("Could not allocate the CPU address cache. Startup aborted.\n");
+        emu_cleanup();
+        return false;
+    }
 
     throttle_timer_on();
 
