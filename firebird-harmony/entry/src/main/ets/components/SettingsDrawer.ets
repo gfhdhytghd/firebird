@@ -2,8 +2,9 @@ import * as firebird from 'libfirebird_harmony.so';
 import { EmulatorStatus, SnapshotInfo, ValidationResult } from 'libfirebird_harmony.so';
 import { DebuggerSettings, FileStore, FirebirdProfile, TransferFile } from '../bridge/FileStore';
 
-const PANEL_BG: string = '#000000';
-const CARD_BG: string = '#20242A';
+const PANEL_BG: string = '#0B0D10';
+const CARD_BG: string = '#181C21';
+const NAV_BG: string = '#12161B';
 const ACTIVE: string = '#5CC8D7';
 const MUTED: string = '#9AA3AD';
 
@@ -164,17 +165,30 @@ export struct SettingsDrawer {
       if (detail.length > 0) Text(detail).fontSize(12).fontColor(MUTED)
     }.width('100%').alignItems(HorizontalAlign.Start).margin({ top: 8, bottom: 6 })
   }
+  private tabIcon(index: number): string {
+    if (index === 0) return '⚙';
+    if (index === 1) return '▶';
+    if (index === 2) return '⇄';
+    return '⌘';
+  }
   @Builder private tabButton(title: string, index: number) {
-    Column({ space: 5 }) {
-      Text(title).fontSize(12).fontColor(this.currentTab === index ? Color.White : MUTED)
-      Divider().height(2).color(this.currentTab === index ? ACTIVE : Color.Transparent)
-    }.layoutWeight(1).padding({ top: 10 }).onClick(() => this.currentTab = index)
+    Column({ space: 2 }) {
+      Text(this.tabIcon(index)).fontSize(18)
+        .fontColor(this.currentTab === index ? ACTIVE : MUTED)
+      Text(title).fontSize(10).fontColor(this.currentTab === index ? Color.White : MUTED)
+    }
+    .layoutWeight(1)
+    .height(52)
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor(this.currentTab === index ? '#203038' : Color.Transparent)
+    .borderRadius(12)
+    .onClick(() => this.currentTab = index)
   }
   @Builder private imageStatus(label: string, ready: boolean) {
     Row() {
       Text(label).fontColor(Color.White).layoutWeight(1)
       Text(ready ? 'Ready' : 'Missing').fontSize(12).fontColor(ready ? ACTIVE : '#FF8A80')
-    }.width('100%').padding(10).backgroundColor(CARD_BG).borderRadius(5)
+    }.width('100%').padding(12).backgroundColor(CARD_BG).borderRadius(12)
   }
 
   @Builder private configTab() {
@@ -375,23 +389,49 @@ export struct SettingsDrawer {
   build() {
     Column() {
       Row() {
-        Button('‹ Menu').fontSize(13).fontColor(ACTIVE).backgroundColor(Color.Transparent)
+        Button('←')
+          .width(44)
+          .height(44)
+          .fontSize(22)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(ACTIVE)
+          .backgroundColor(CARD_BG)
+          .borderRadius(12)
+          .border({ width: 1, color: '#2A3139' })
+          .margin({ right: 12 })
+          .accessibilityText('Back to menu')
           .onClick(() => this.onClose())
         Column({ space: 1 }) {
-          Text('Configuration').fontSize(20).fontWeight(FontWeight.Bold).fontColor(Color.White)
+          Text('Configuration').fontSize(22).fontWeight(FontWeight.Bold).fontColor(Color.White)
           Text(this.fileStore.getActiveProfileName()).fontSize(11).fontColor(ACTIVE)
-        }.alignItems(HorizontalAlign.End).layoutWeight(1)
-      }.width('100%').padding({ left: 14, right: 8, top: 12, bottom: 6 })
-      Row() {
-        this.tabButton('Config', 0); this.tabButton('Emulator', 1)
-        this.tabButton('Transfer', 2); this.tabButton('Debugger', 3)
-      }.width('100%').backgroundColor('#171A1F')
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      }
+      .width('100%')
+      .height(68)
+      .padding({ left: 8, right: 16, top: 8, bottom: 6 })
+      .backgroundColor(PANEL_BG)
+      .alignItems(VerticalAlign.Center)
+
       Scroll() {
         if (this.currentTab === 0) this.configTab()
         else if (this.currentTab === 1) this.emulatorTab()
         else if (this.currentTab === 2) this.transferTab()
         else this.debuggerTab()
-      }.layoutWeight(1).width('100%').padding({ left: 14, right: 14, bottom: 18 })
+      }
+      .layoutWeight(1)
+      .width('100%')
+      .align(Alignment.Top)
+      .padding({ left: 16, right: 16, top: 2, bottom: 16 })
+
+      Row({ space: 6 }) {
+        this.tabButton('Config', 0); this.tabButton('Emulator', 1)
+        this.tabButton('Transfer', 2); this.tabButton('Debugger', 3)
+      }
+      .width('100%')
+      .height(64)
+      .padding({ left: 8, right: 8, top: 6, bottom: 6 })
+      .backgroundColor(NAV_BG)
+      .border({ width: { top: 1 }, color: '#282D34' })
     }.width('100%').height('100%').backgroundColor(PANEL_BG)
   }
 }

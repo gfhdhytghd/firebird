@@ -18,13 +18,24 @@ export default class EntryAbility extends UIAbility {
         statusBarContentColor: '#FFFFFF',
         navigationBarContentColor: '#FFFFFF'
       });
-      const updateTopInset = (area: window.AvoidArea): void => {
-        AppStorage.setOrCreate<number>('firebirdTopInsetPx', area.topRect.height);
-        AppStorage.set<number>('firebirdTopInsetPx', area.topRect.height);
+      let systemTopInset: number = mainWindow
+        .getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;
+      let cutoutTopInset: number = mainWindow
+        .getWindowAvoidArea(window.AvoidAreaType.TYPE_CUTOUT).topRect.height;
+      const publishTopInset = (): void => {
+        const topInset = Math.max(systemTopInset, cutoutTopInset);
+        AppStorage.setOrCreate<number>('firebirdTopInsetPx', topInset);
+        AppStorage.set<number>('firebirdTopInsetPx', topInset);
       };
-      updateTopInset(mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM));
+      publishTopInset();
       mainWindow.on('avoidAreaChange', (options: window.AvoidAreaOptions): void => {
-        if (options.type === window.AvoidAreaType.TYPE_SYSTEM) updateTopInset(options.area);
+        if (options.type === window.AvoidAreaType.TYPE_SYSTEM) {
+          systemTopInset = options.area.topRect.height;
+          publishTopInset();
+        } else if (options.type === window.AvoidAreaType.TYPE_CUTOUT) {
+          cutoutTopInset = options.area.topRect.height;
+          publishTopInset();
+        }
       });
       windowStage.loadContent('pages/Index');
     });

@@ -157,14 +157,26 @@ struct AlphaKeyRow {
 export struct CalculatorKeypad {
   @Prop speed: number = 0;
   @Prop speedLimitMode: number = 1;
+  @Prop layoutMode: string = 'full';
+  @Prop showSpeed: boolean = true;
+  @Prop navigationSide: string = 'left';
   onCycleSpeedLimit: () => void = () => {};
+  onMoveNavigation: (side: string) => void = (_side: string): void => {};
   @State private contentWidth: number = 265;
   @State private contentHeight: number = 340;
   @State private availableWidth: number = 265;
   @State private availableHeight: number = 340;
+  private navigationPointer: number = -1;
+  private navigationOriginX: number = 0;
 
   private x(value: number): number { return this.contentWidth * value / 265; }
-  private y(value: number): number { return this.contentHeight * value / 340; }
+  private baseHeight(): number {
+    if (this.layoutMode === 'navigation') return 104;
+    if (this.layoutMode === 'main') return 236;
+    return 340;
+  }
+
+  private y(value: number): number { return this.contentHeight * value / this.baseHeight(); }
   private font(value: number): number { return Math.max(8, this.x(value)); }
   private alphaColumnWidth(): number { return this.x((265 - 10 - 8 * 3) / 9); }
 
@@ -172,7 +184,7 @@ export struct CalculatorKeypad {
     if (width <= 0 || height <= 0) return;
     this.availableWidth = width;
     this.availableHeight = height;
-    const panelRatio = 265 / 340;
+    const panelRatio = 265 / this.baseHeight();
     if (width / height > panelRatio) {
       this.contentHeight = height;
       this.contentWidth = height * panelRatio;
@@ -188,9 +200,58 @@ export struct CalculatorKeypad {
     return '100%';
   }
 
+  private speedAreaHeight(): number {
+    return Math.max(0, this.availableHeight - this.contentHeight);
+  }
+
+  private speedRowHeight(): number {
+    return Math.min(36, this.speedAreaHeight());
+  }
+
+  private contentX(): number { return (this.availableWidth - this.contentWidth) / 2; }
+
+  private contentY(): number {
+    if (this.layoutMode === 'main' || this.layoutMode === 'navigation')
+      return (this.availableHeight - this.contentHeight) / 2;
+    return this.availableHeight - this.contentHeight;
+  }
+
+  private isNavigationBlank(point: TouchObject): boolean {
+    const x = this.contentX();
+    const y = this.contentY();
+    if (point.x < x || point.x > x + this.contentWidth ||
+        point.y < y || point.y > y + this.contentHeight) return true;
+    const localX = (point.x - x) * 265 / Math.max(1, this.contentWidth);
+    return (localX >= 38 && localX <= 73) || (localX >= 192 && localX <= 227);
+  }
+
+  private navigationPoint(event: TouchEvent): TouchObject | undefined {
+    const changed = event.changedTouches.find((point: TouchObject): boolean => point.id === this.navigationPointer);
+    if (changed !== undefined) return changed;
+    return event.touches.find((point: TouchObject): boolean => point.id === this.navigationPointer);
+  }
+
+  private handleNavigationDrag(event: TouchEvent): void {
+    if (this.layoutMode !== 'navigation') return;
+    if (event.type === TouchType.Down && this.navigationPointer < 0 && event.changedTouches.length > 0 &&
+        this.isNavigationBlank(event.changedTouches[0])) {
+      this.navigationPointer = event.changedTouches[0].id;
+      this.navigationOriginX = event.changedTouches[0].windowX;
+    } else if (event.type === TouchType.Move && this.navigationPointer >= 0) {
+      const point = this.navigationPoint(event);
+      if (point !== undefined && Math.abs(point.windowX - this.navigationOriginX) >= 32) {
+        const side = point.windowX > this.navigationOriginX ? 'right' : 'left';
+        this.navigationPointer = -1;
+        if (side !== this.navigationSide) this.onMoveNavigation(side);
+      }
+    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      this.navigationPointer = -1;
+    }
+  }
+
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      if (this.availableHeight - this.contentHeight >= 18) {
+      if (this.showSpeed && this.layoutMode !== 'main' && this.speedAreaHeight() >= 18) {
         Row() {
           Text(`Speed ${(this.speed * 100).toFixed(0)}%  ·  Limit ${this.speedLimitLabel()}`)
             .fontColor('#DDE6E8')
@@ -198,14 +259,19 @@ export struct CalculatorKeypad {
             .fontWeight(FontWeight.Medium)
         }
         .width(this.contentWidth)
-        .height(this.availableHeight - this.contentHeight)
+        .height(this.speedRowHeight())
         .justifyContent(FlexAlign.Center)
-        .position({ x: (this.availableWidth - this.contentWidth) / 2, y: 0 })
+        .alignItems(VerticalAlign.Center)
+        .position({
+          x: (this.availableWidth - this.contentWidth) / 2,
+          y: (this.speedAreaHeight() - this.speedRowHeight()) / 2
+        })
         .onClick(() => this.onCycleSpeedLimit())
       }
 
       Column({ space: 0 }) {
-        Row({ space: 0 }) {
+        if (this.layoutMode !== 'main') {
+          Row({ space: 0 }) {
           Column({ space: this.y(16) }) {
             CalculatorKey({ keyId: 73, label: 'esc', keyHeight: this.y(20), legendOffset: this.y(10),
               faceStyle: 'nav', fontSize: this.font(9), hitLeft: this.x(5), hitRight: this.x(17.5),
@@ -244,11 +310,19 @@ export struct CalculatorKeypad {
         .padding({ left: this.x(5), right: this.x(5), top: this.y(6), bottom: this.y(6) })
         .width('100%')
         .height(this.y(104))
-        .backgroundColor('#111111')
+          .backgroundColor('#111111')
+        }
 
-        Blank().height(this.y(10))
+        if (this.layoutMode === 'full') {
+          Blank().height(this.y(10))
+        }
 
-        Row({ space: this.x(8) }) {
+        if (this.layoutMode === 'main') {
+          Blank().height(this.y(10)).backgroundColor('#3F4146')
+        }
+
+        if (this.layoutMode !== 'navigation') {
+          Row({ space: this.x(8) }) {
           Column({ space: 0 }) {
             Row() {
               CalculatorKey({ keyId: 86, label: 'ctrl', keyHeight: this.y(20),
@@ -311,11 +385,11 @@ export struct CalculatorKeypad {
         }
         .padding({ left: this.x(5), right: this.x(5) })
         .width('100%')
-        .height(this.y(140))
+          .height(this.y(140))
 
-        Blank().height(this.y(6))
+          Blank().height(this.y(6))
 
-        Column({ space: 0 }) {
+          Column({ space: 0 }) {
           AlphaKeyRow({ keys: ALPHA_ROW_1, rowHeight: this.y(20), gap: this.x(3),
             columnWidth: this.alphaColumnWidth(), fontSize: this.font(7) })
           AlphaKeyRow({ keys: ALPHA_ROW_2, rowHeight: this.y(20), gap: this.x(3),
@@ -327,17 +401,23 @@ export struct CalculatorKeypad {
         }
         .padding({ left: this.x(5), right: this.x(5) })
         .width('100%')
-        .height(this.y(80))
+          .height(this.y(80))
+        }
 
         Blank().layoutWeight(1)
       }
       .width(this.contentWidth)
       .height(this.contentHeight)
       .backgroundColor('#3F4146')
+      .position({
+        x: this.contentX(),
+        y: this.contentY()
+      })
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#3F4146')
+    .onTouch((event: TouchEvent) => this.handleNavigationDrag(event))
     .onAreaChange((_oldArea: Area, newArea: Area) => {
       this.fit(Number(newArea.width), Number(newArea.height));
     })
