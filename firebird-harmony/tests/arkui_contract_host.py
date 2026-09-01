@@ -61,6 +61,9 @@ assert up_branch is not None and "this.showMobilePage(1)" in up_branch.group(1)
 assert move_branch is not None and "this.showMobilePage(1)" not in move_branch.group(1)
 assert ".translate({ x: -this.drawerWidth() * (1 - this.drawerProgress) })" in index_page
 assert ".animation({ duration: this.drawerDragging ? 0 : 220, curve: Curve.EaseOut })" in index_page
+assert ".hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Block : HitTestMode.None)" in index_page
+assert "if (this.mobilePage === 2)" in index_page
+assert "this.mobilePage === 1 || this.drawerProgress > 0" not in index_page
 assert "private releaseAllInputs(): void" in index_page
 assert "firebird.releaseAllInputs();" in index_page
 assert index_page.count("this.showMobilePage(") >= 3
@@ -68,7 +71,9 @@ assert index_page.count("this.handleDrawerSwipe(event)") == 2
 assert "Text('Swipe here')" not in index_page
 assert "private drawerHandle()" not in index_page
 assert "backgroundColor('#01000000')" not in index_page
-assert index_page.count(".onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))") == 2
+assert index_page.count("backgroundColor('#00000000')") == 2
+assert index_page.count(".hitTestBehavior(HitTestMode.Block)") >= 3
+assert index_page.count(".clip(true)") == 2
 assert "this.wideLayout = this.landscape || this.viewWidth >= 600" in index_page
 assert "layoutMode: 'navigation'" in index_page
 assert "@State private navigationSide" in index_page

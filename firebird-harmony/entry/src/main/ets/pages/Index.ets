@@ -243,10 +243,16 @@ struct Index {
           libraryname: 'firebird_harmony'
         })
         .width('100%').height('100%').backgroundColor(Color.Black)
-        .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
+        Row()
+          .width('100%')
+          .height('100%')
+          .backgroundColor('#00000000')
+          .hitTestBehavior(HitTestMode.Block)
+          .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
       }
       .width('100%')
       .aspectRatio(4 / 3)
+      .clip(true)
 
       CalculatorKeypad({
         speed: this.status.speed,
@@ -271,8 +277,13 @@ struct Index {
                 XComponent({ id: 'firebirdLcdLandscape', type: XComponentType.SURFACE,
                   libraryname: 'firebird_harmony' })
                   .width('100%').height('100%').backgroundColor(Color.Black)
+                Row()
+                  .width('100%')
+                  .height('100%')
+                  .backgroundColor('#00000000')
+                  .hitTestBehavior(HitTestMode.Block)
                   .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
-              }.width('100%').aspectRatio(4 / 3)
+              }.width('100%').aspectRatio(4 / 3).clip(true)
               this.compactSpeedPanel()
               if (this.navigationSide === 'left') {
                 CalculatorKeypad({
@@ -330,7 +341,17 @@ struct Index {
         this.emulatorView()
       }
 
-      if (this.mobilePage === 1 || this.drawerProgress > 0) {
+      if (this.mobilePage === 2) {
+        Row() {
+          SettingsDrawer({
+            status: $status,
+            jitEnabled: $jitEnabled,
+            fileStore: this.fileStore,
+            onFilesChanged: async () => { await this.configureFiles(); },
+            onClose: () => { this.returnToDrawer(); }
+          }).width('100%')
+        }.width('100%').height('100%')
+      } else {
         Row() {
           MobileDrawer({
             status: $status,
@@ -345,17 +366,10 @@ struct Index {
             .backgroundColor('#66000000')
             .opacity(this.drawerProgress)
             .onClick(() => this.closeDrawer())
-        }.width('100%').height('100%')
-      } else if (this.mobilePage === 2) {
-        Row() {
-          SettingsDrawer({
-            status: $status,
-            jitEnabled: $jitEnabled,
-            fileStore: this.fileStore,
-            onFilesChanged: async () => { await this.configureFiles(); },
-            onClose: () => { this.returnToDrawer(); }
-          }).width('100%')
-        }.width('100%').height('100%')
+        }
+        .width('100%')
+        .height('100%')
+        .hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Block : HitTestMode.None)
       }
     }
     .width('100%')
