@@ -63,6 +63,18 @@ struct Index {
     this.releaseAllInputs();
   }
 
+  onBackPress(): boolean {
+    if (this.mobilePage === 2) {
+      this.returnToDrawer();
+      return true;
+    }
+    if (this.mobilePage === 1 || this.drawerProgress > 0) {
+      this.closeDrawer();
+      return true;
+    }
+    return false;
+  }
+
   private releaseAllInputs(): void {
     this.physicalKeys.releaseAll();
     firebird.releaseAllInputs();
@@ -369,7 +381,7 @@ struct Index {
         }
         .width('100%')
         .height('100%')
-        .hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Block : HitTestMode.None)
+        .hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Default : HitTestMode.None)
       }
     }
     .width('100%')

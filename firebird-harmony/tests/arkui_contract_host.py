@@ -12,6 +12,9 @@ index_page = (ROOT / "firebird-harmony/entry/src/main/ets/pages/Index.ets").read
 entry_ability = (ROOT / "firebird-harmony/entry/src/main/ets/entryability/EntryAbility.ets").read_text()
 native_types = (ROOT / "firebird-harmony/entry/src/main/cpp/types/libfirebird_harmony/Index.d.ts").read_text()
 settings_drawer = (ROOT / "firebird-harmony/entry/src/main/ets/components/SettingsDrawer.ets").read_text()
+assert "Button('←')" in settings_drawer
+assert ".accessibilityText('Back to menu')" in settings_drawer
+assert "Button('‹ Menu')" not in settings_drawer
 mobile_drawer = (ROOT / "firebird-harmony/entry/src/main/ets/components/MobileDrawer.ets").read_text()
 napi_source = (ROOT / "firebird-harmony/entry/src/main/cpp/napi/napi_init.cpp").read_text()
 emulator_service = (ROOT / "firebird-harmony/entry/src/main/cpp/emulator/emulator_service.cpp").read_text()
@@ -61,9 +64,15 @@ assert up_branch is not None and "this.showMobilePage(1)" in up_branch.group(1)
 assert move_branch is not None and "this.showMobilePage(1)" not in move_branch.group(1)
 assert ".translate({ x: -this.drawerWidth() * (1 - this.drawerProgress) })" in index_page
 assert ".animation({ duration: this.drawerDragging ? 0 : 220, curve: Curve.EaseOut })" in index_page
-assert ".hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Block : HitTestMode.None)" in index_page
+assert ".hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Default : HitTestMode.None)" in index_page
+back_handler = re.search(r"onBackPress\(\): boolean \{(.*?)\n  \}", index_page, re.S)
+assert back_handler is not None
+assert "this.mobilePage === 2" in back_handler.group(1)
+assert "this.returnToDrawer()" in back_handler.group(1)
+assert "this.mobilePage === 1 || this.drawerProgress > 0" in back_handler.group(1)
+assert "this.closeDrawer()" in back_handler.group(1)
 assert "if (this.mobilePage === 2)" in index_page
-assert "this.mobilePage === 1 || this.drawerProgress > 0" not in index_page
+assert index_page.count("this.mobilePage === 1 || this.drawerProgress > 0") == 1
 assert "private releaseAllInputs(): void" in index_page
 assert "firebird.releaseAllInputs();" in index_page
 assert index_page.count("this.showMobilePage(") >= 3

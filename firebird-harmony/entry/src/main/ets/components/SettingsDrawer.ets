@@ -389,7 +389,17 @@ export struct SettingsDrawer {
   build() {
     Column() {
       Row() {
-        Button('‹ Menu').fontSize(13).fontColor(ACTIVE).backgroundColor(Color.Transparent)
+        Button('←')
+          .width(44)
+          .height(44)
+          .fontSize(22)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(ACTIVE)
+          .backgroundColor(CARD_BG)
+          .borderRadius(12)
+          .border({ width: 1, color: '#2A3139' })
+          .margin({ right: 12 })
+          .accessibilityText('Back to menu')
           .onClick(() => this.onClose())
         Column({ space: 1 }) {
           Text('Configuration').fontSize(22).fontWeight(FontWeight.Bold).fontColor(Color.White)
