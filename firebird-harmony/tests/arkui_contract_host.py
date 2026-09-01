@@ -65,6 +65,7 @@ assert move_branch is not None and "this.showMobilePage(1)" not in move_branch.g
 assert ".translate({ x: -this.drawerWidth() * (1 - this.drawerProgress) })" in index_page
 assert ".animation({ duration: this.drawerDragging ? 0 : 220, curve: Curve.EaseOut })" in index_page
 assert ".hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Default : HitTestMode.None)" in index_page
+assert index_page.count(".hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Default : HitTestMode.None)") == 2
 back_handler = re.search(r"onBackPress\(\): boolean \{(.*?)\n  \}", index_page, re.S)
 assert back_handler is not None
 assert "this.mobilePage === 2" in back_handler.group(1)

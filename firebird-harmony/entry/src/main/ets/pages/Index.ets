@@ -377,6 +377,7 @@ struct Index {
           Blank()
             .backgroundColor('#66000000')
             .opacity(this.drawerProgress)
+            .hitTestBehavior(this.mobilePage === 1 ? HitTestMode.Default : HitTestMode.None)
             .onClick(() => this.closeDrawer())
         }
         .width('100%')
