@@ -157,6 +157,7 @@ struct AlphaKeyRow {
 export struct CalculatorKeypad {
   @Prop speed: number = 0;
   @Prop speedLimitMode: number = 1;
+  @Prop layoutMode: string = 'full';
   onCycleSpeedLimit: () => void = () => {};
   @State private contentWidth: number = 265;
   @State private contentHeight: number = 340;
@@ -164,7 +165,13 @@ export struct CalculatorKeypad {
   @State private availableHeight: number = 340;
 
   private x(value: number): number { return this.contentWidth * value / 265; }
-  private y(value: number): number { return this.contentHeight * value / 340; }
+  private baseHeight(): number {
+    if (this.layoutMode === 'navigation') return 104;
+    if (this.layoutMode === 'main') return 226;
+    return 340;
+  }
+
+  private y(value: number): number { return this.contentHeight * value / this.baseHeight(); }
   private font(value: number): number { return Math.max(8, this.x(value)); }
   private alphaColumnWidth(): number { return this.x((265 - 10 - 8 * 3) / 9); }
 
@@ -172,7 +179,7 @@ export struct CalculatorKeypad {
     if (width <= 0 || height <= 0) return;
     this.availableWidth = width;
     this.availableHeight = height;
-    const panelRatio = 265 / 340;
+    const panelRatio = 265 / this.baseHeight();
     if (width / height > panelRatio) {
       this.contentHeight = height;
       this.contentWidth = height * panelRatio;
@@ -188,9 +195,17 @@ export struct CalculatorKeypad {
     return '100%';
   }
 
+  private speedAreaHeight(): number {
+    return Math.max(0, this.availableHeight - this.contentHeight);
+  }
+
+  private speedRowHeight(): number {
+    return Math.min(36, this.speedAreaHeight());
+  }
+
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      if (this.availableHeight - this.contentHeight >= 18) {
+      if (this.layoutMode !== 'main' && this.speedAreaHeight() >= 18) {
         Row() {
           Text(`Speed ${(this.speed * 100).toFixed(0)}%  ·  Limit ${this.speedLimitLabel()}`)
             .fontColor('#DDE6E8')
@@ -198,14 +213,19 @@ export struct CalculatorKeypad {
             .fontWeight(FontWeight.Medium)
         }
         .width(this.contentWidth)
-        .height(this.availableHeight - this.contentHeight)
+        .height(this.speedRowHeight())
         .justifyContent(FlexAlign.Center)
-        .position({ x: (this.availableWidth - this.contentWidth) / 2, y: 0 })
+        .alignItems(VerticalAlign.Center)
+        .position({
+          x: (this.availableWidth - this.contentWidth) / 2,
+          y: (this.speedAreaHeight() - this.speedRowHeight()) / 2
+        })
         .onClick(() => this.onCycleSpeedLimit())
       }
 
       Column({ space: 0 }) {
-        Row({ space: 0 }) {
+        if (this.layoutMode !== 'main') {
+          Row({ space: 0 }) {
           Column({ space: this.y(16) }) {
             CalculatorKey({ keyId: 73, label: 'esc', keyHeight: this.y(20), legendOffset: this.y(10),
               faceStyle: 'nav', fontSize: this.font(9), hitLeft: this.x(5), hitRight: this.x(17.5),
@@ -244,11 +264,15 @@ export struct CalculatorKeypad {
         .padding({ left: this.x(5), right: this.x(5), top: this.y(6), bottom: this.y(6) })
         .width('100%')
         .height(this.y(104))
-        .backgroundColor('#111111')
+          .backgroundColor('#111111')
+        }
 
-        Blank().height(this.y(10))
+        if (this.layoutMode === 'full') {
+          Blank().height(this.y(10))
+        }
 
-        Row({ space: this.x(8) }) {
+        if (this.layoutMode !== 'navigation') {
+          Row({ space: this.x(8) }) {
           Column({ space: 0 }) {
             Row() {
               CalculatorKey({ keyId: 86, label: 'ctrl', keyHeight: this.y(20),
@@ -311,11 +335,11 @@ export struct CalculatorKeypad {
         }
         .padding({ left: this.x(5), right: this.x(5) })
         .width('100%')
-        .height(this.y(140))
+          .height(this.y(140))
 
-        Blank().height(this.y(6))
+          Blank().height(this.y(6))
 
-        Column({ space: 0 }) {
+          Column({ space: 0 }) {
           AlphaKeyRow({ keys: ALPHA_ROW_1, rowHeight: this.y(20), gap: this.x(3),
             columnWidth: this.alphaColumnWidth(), fontSize: this.font(7) })
           AlphaKeyRow({ keys: ALPHA_ROW_2, rowHeight: this.y(20), gap: this.x(3),
@@ -327,13 +351,19 @@ export struct CalculatorKeypad {
         }
         .padding({ left: this.x(5), right: this.x(5) })
         .width('100%')
-        .height(this.y(80))
+          .height(this.y(80))
+        }
 
         Blank().layoutWeight(1)
       }
       .width(this.contentWidth)
       .height(this.contentHeight)
       .backgroundColor('#3F4146')
+      .position({
+        x: (this.availableWidth - this.contentWidth) / 2,
+        y: this.layoutMode === 'main' ?
+          (this.availableHeight - this.contentHeight) / 2 : this.availableHeight - this.contentHeight
+      })
     }
     .width('100%')
     .height('100%')

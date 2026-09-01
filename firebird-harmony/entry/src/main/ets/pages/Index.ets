@@ -22,6 +22,7 @@ struct Index {
   // Mobile Firebird navigation order: Configuration <- Drawer <- Emulator.
   @State private mobilePage: number = 0;
   @State private landscape: boolean = false;
+  @State private wideLayout: boolean = false;
   @State private jitEnabled: boolean = true;
   @State private status: EmulatorStatus = EMPTY_STATUS;
   @State private viewWidth: number = 1;
@@ -30,8 +31,11 @@ struct Index {
   private physicalKeys: PhysicalKeyMap = new PhysicalKeyMap();
   private drawerPointer: number = -1;
   private drawerOriginX: number = 0;
-  private drawerTriggered: boolean = false;
+  @State private drawerProgress: number = 0;
+  @State private drawerDragging: boolean = false;
   @State private speedLimitMode: number = 1;
+  @State private splitRatio: number = 0.5;
+  private splitPointer: number = -1;
 
   async aboutToAppear(): Promise<void> {
     this.fileStore.updateContext(this.getUIContext().getHostContext() as common.UIAbilityContext);
@@ -68,6 +72,27 @@ struct Index {
     this.mobilePage = page;
   }
 
+  private drawerWidth(): number { return Math.max(1, this.viewWidth * 0.62); }
+
+  private closeDrawer(): void {
+    this.releaseAllInputs();
+    this.drawerDragging = false;
+    this.drawerProgress = 0;
+    setTimeout(() => {
+      if (this.drawerProgress === 0 && this.mobilePage === 1) this.mobilePage = 0;
+    }, 230);
+  }
+
+  private openConfiguration(): void {
+    this.drawerProgress = 0;
+    this.showMobilePage(2);
+  }
+
+  private returnToDrawer(): void {
+    this.drawerProgress = 1;
+    this.showMobilePage(1);
+  }
+
   private async configureFiles(): Promise<void> {
     const configuration: StoredConfiguration = {
       bootPath: this.fileStore.bootPath(),
@@ -96,22 +121,28 @@ struct Index {
     if (event.type === TouchType.Down && this.drawerPointer < 0 && event.changedTouches.length > 0) {
       this.drawerPointer = event.changedTouches[0].id;
       this.drawerOriginX = event.changedTouches[0].x;
-      this.drawerTriggered = false;
+      this.drawerDragging = true;
+      this.drawerProgress = 0;
     } else if (event.type === TouchType.Move && this.drawerPointer >= 0) {
       const point = this.drawerPoint(event);
-      if (point !== undefined && point.x - this.drawerOriginX > 48) {
-        this.drawerTriggered = true;
+      if (point !== undefined) {
+        this.drawerProgress = Math.min(1, Math.max(0,
+          (point.x - this.drawerOriginX) / this.drawerWidth()));
       }
     } else if (event.type === TouchType.Up) {
-      const openDrawer = this.drawerTriggered;
+      const openDrawer = this.drawerProgress >= 0.2;
       this.drawerPointer = -1;
-      this.drawerTriggered = false;
+      this.drawerDragging = false;
       if (openDrawer) {
+        this.drawerProgress = 1;
         this.showMobilePage(1);
+      } else {
+        this.drawerProgress = 0;
       }
     } else if (event.type === TouchType.Cancel) {
       this.drawerPointer = -1;
-      this.drawerTriggered = false;
+      this.drawerDragging = false;
+      this.drawerProgress = 0;
     }
   }
 
@@ -128,37 +159,73 @@ struct Index {
     }
   }
 
-  @Builder
-  private drawerHandle() {
-    Row() {
-      Text('Swipe here').fontColor(Color.White).fontSize(8).maxLines(1)
-        .width(80).height(18).textAlign(TextAlign.Center).rotate({ angle: -90 })
+  private speedLimitLabel(): string {
+    if (this.speedLimitMode === 2) return '200%';
+    if (this.speedLimitMode === 0) return 'unlimited';
+    return '100%';
+  }
+
+  private splitterWidth(): number { return 12; }
+
+  private paneWidth(): number { return Math.max(1, this.viewWidth - this.splitterWidth()); }
+
+  private leftPaneWidth(): number { return this.paneWidth() * this.splitRatio; }
+
+  private rightPaneWidth(): number { return this.paneWidth() * (1 - this.splitRatio); }
+
+  private navigationOnRight(): boolean {
+    return this.rightPaneWidth() / Math.max(1, this.viewHeight) >= 265 / 340;
+  }
+
+  private splitterPoint(event: TouchEvent): TouchObject | undefined {
+    const changed = event.changedTouches.find((point: TouchObject): boolean => point.id === this.splitPointer);
+    if (changed !== undefined) return changed;
+    return event.touches.find((point: TouchObject): boolean => point.id === this.splitPointer);
+  }
+
+  private updateSplit(point: TouchObject): void {
+    const ratio = (point.windowX - this.splitterWidth() / 2) / this.paneWidth();
+    this.splitRatio = Math.min(0.7, Math.max(0.3, ratio));
+  }
+
+  private handleSplitterTouch(event: TouchEvent): void {
+    if (event.type === TouchType.Down && this.splitPointer < 0 && event.changedTouches.length > 0) {
+      this.splitPointer = event.changedTouches[0].id;
+      this.updateSplit(event.changedTouches[0]);
+    } else if (event.type === TouchType.Move && this.splitPointer >= 0) {
+      const point = this.splitterPoint(event);
+      if (point !== undefined) this.updateSplit(point);
+    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      this.splitPointer = -1;
     }
-    .width(18)
-    .height('100%')
-    .backgroundColor(Color.Black)
+  }
+
+  @Builder
+  private compactSpeedPanel() {
+    Row() {
+      Text(`Speed ${(this.status.speed * 100).toFixed(0)}%  ·  Limit ${this.speedLimitLabel()}`)
+        .fontColor('#DDE6E8')
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+    }
+    .width('100%')
+    .height(36)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
+    .onClick(() => this.cycleSpeedLimit())
   }
 
   @Builder
   private emulatorView() {
     Column() {
-      Row() {
-        this.drawerHandle()
-        Stack({ alignContent: Alignment.Start }) {
-          XComponent({
-            id: 'firebirdLcd',
-            type: XComponentType.SURFACE,
-            libraryname: 'firebird_harmony'
-          })
-          .width('100%').height('100%').backgroundColor(Color.Black)
-          Row()
-            .width(120).height('100%').backgroundColor('#01000000')
-            .hitTestBehavior(HitTestMode.Block)
-            .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
-        }
-        .layoutWeight(1).height('100%')
+      Stack({ alignContent: Alignment.Start }) {
+        XComponent({
+          id: 'firebirdLcd',
+          type: XComponentType.SURFACE,
+          libraryname: 'firebird_harmony'
+        })
+        .width('100%').height('100%').backgroundColor(Color.Black)
+        .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
       }
       .width('100%')
       .aspectRatio(4 / 3)
@@ -177,41 +244,65 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
-      if (this.landscape) {
+      if (this.wideLayout) {
         Row() {
-          Row() {
-            this.drawerHandle()
+          Column() {
             Stack({ alignContent: Alignment.Start }) {
               XComponent({ id: 'firebirdLcdLandscape', type: XComponentType.SURFACE,
                 libraryname: 'firebird_harmony' })
                 .width('100%').height('100%').backgroundColor(Color.Black)
-              Row()
-                .width(120).height('100%').backgroundColor('#01000000')
-                .hitTestBehavior(HitTestMode.Block)
                 .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
-            }.layoutWeight(1).height('100%')
-          }.layoutWeight(1).height('100%')
+            }.width('100%').aspectRatio(4 / 3)
+            if (this.navigationOnRight()) {
+              Column() {
+                Blank().layoutWeight(1)
+                this.compactSpeedPanel()
+                Blank().layoutWeight(1)
+              }.layoutWeight(1).width('100%')
+            } else {
+              CalculatorKeypad({
+                layoutMode: 'navigation',
+                speed: this.status.speed,
+                speedLimitMode: this.speedLimitMode,
+                onCycleSpeedLimit: () => this.cycleSpeedLimit()
+              }).layoutWeight(1).width('100%')
+            }
+          }.width(this.leftPaneWidth()).height('100%')
+          Row() {
+            Divider().vertical(true).width(2).height(44).color('#899096')
+          }
+          .width(this.splitterWidth())
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(VerticalAlign.Center)
+          .backgroundColor('#25282D')
+          .onTouch((event: TouchEvent) => this.handleSplitterTouch(event))
           CalculatorKeypad({
+            layoutMode: this.navigationOnRight() ? 'full' : 'main',
             speed: this.status.speed,
             speedLimitMode: this.speedLimitMode,
             onCycleSpeedLimit: () => this.cycleSpeedLimit()
-          }).width('48%').height('100%')
+          }).layoutWeight(1).height('100%')
         }.width('100%').height('100%').backgroundColor('#303238')
       } else {
         this.emulatorView()
       }
 
-      if (this.mobilePage === 1) {
+      if (this.mobilePage === 1 || this.drawerProgress > 0) {
         Row() {
           MobileDrawer({
             status: $status,
             fileStore: this.fileStore,
-            onOpenConfiguration: () => { this.showMobilePage(2); },
-            onClose: () => { this.showMobilePage(0); }
-          }).width('62%')
+            onOpenConfiguration: () => { this.openConfiguration(); },
+            onClose: () => { this.closeDrawer(); }
+          })
+            .width('62%')
+            .translate({ x: -this.drawerWidth() * (1 - this.drawerProgress) })
+            .animation({ duration: this.drawerDragging ? 0 : 220, curve: Curve.EaseOut })
           Blank()
             .backgroundColor('#66000000')
-            .onClick(() => this.showMobilePage(0))
+            .opacity(this.drawerProgress)
+            .onClick(() => this.closeDrawer())
         }.width('100%').height('100%')
       } else if (this.mobilePage === 2) {
         Row() {
@@ -220,7 +311,7 @@ struct Index {
             jitEnabled: $jitEnabled,
             fileStore: this.fileStore,
             onFilesChanged: async () => { await this.configureFiles(); },
-            onClose: () => { this.showMobilePage(1); }
+            onClose: () => { this.returnToDrawer(); }
           }).width('100%')
         }.width('100%').height('100%')
       }
@@ -237,6 +328,7 @@ struct Index {
       this.viewWidth = Number(newArea.width);
       this.viewHeight = Number(newArea.height);
       this.landscape = this.viewWidth > this.viewHeight;
+      this.wideLayout = this.landscape || this.viewWidth >= 600;
     })
   }
 }

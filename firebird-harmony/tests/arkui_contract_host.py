@@ -34,7 +34,8 @@ expected = {
 assert ids == expected, f"ArkUI keypad coverage mismatch: missing={expected - ids}, extra={ids - expected}"
 assert "{ id: 4, label: 'space', span: 2 }" in keypad
 assert "this.columnWidth * span + this.gap * (span - 1)" in keypad
-assert ".responseRegion({" in calculator_key
+assert ".responseRegion({" not in calculator_key
+assert "calc(100%" not in calculator_key
 for hit_prop in ("hitLeft", "hitRight", "hitTop", "hitBottom"):
     assert f"@Prop {hit_prop}" in calculator_key
 assert "hitLeft: this.gap / 2" in keypad and "hitRight: this.gap / 2" in keypad
@@ -47,23 +48,37 @@ for key_code in ("KEYCODE_HOME", "KEYCODE_MOVE_END", "KEYCODE_PAGE_UP", "KEYCODE
 assert "deviceId" in physical and "this.altKeys" in physical
 assert "setTouchpadState(0.5, 0.5, true, false)" in physical
 assert "firebirdTopInsetPx" in entry_ability and "getWindowAvoidArea" in entry_ability
+assert "TYPE_SYSTEM" in entry_ability and "TYPE_CUTOUT" in entry_ability
+assert "Math.max(systemTopInset, cutoutTopInset)" in entry_ability
 assert "px2vp(this.topInsetPx)" in index_page
 assert "setSpeedLimit(2)" in index_page and "setSpeedLimit(0)" in index_page
 assert ".onClick(() => this.drawerOpen = true)" not in index_page
-assert "point.x - this.drawerOriginX > 48" in index_page
-assert "this.drawerTriggered = true" in index_page
+assert "(point.x - this.drawerOriginX) / this.drawerWidth()" in index_page
+assert "this.drawerProgress >= 0.2" in index_page
 up_branch = re.search(r"event\.type === TouchType\.Up\)(.*?)else if \(event\.type === TouchType\.Cancel", index_page, re.S)
 move_branch = re.search(r"event\.type === TouchType\.Move.*?\{(.*?)else if \(event\.type === TouchType\.Up", index_page, re.S)
 assert up_branch is not None and "this.showMobilePage(1)" in up_branch.group(1)
 assert move_branch is not None and "this.showMobilePage(1)" not in move_branch.group(1)
+assert ".translate({ x: -this.drawerWidth() * (1 - this.drawerProgress) })" in index_page
+assert ".animation({ duration: this.drawerDragging ? 0 : 220, curve: Curve.EaseOut })" in index_page
 assert "private releaseAllInputs(): void" in index_page
 assert "firebird.releaseAllInputs();" in index_page
-assert index_page.count("this.showMobilePage(") >= 5
+assert index_page.count("this.showMobilePage(") >= 3
 assert index_page.count("this.handleDrawerSwipe(event)") == 2
-assert ".width(18)" in index_page
-assert "Text('Swipe here')" in index_page and "rotate({ angle: -90 })" in index_page
-assert index_page.count(".width(120).height('100%').backgroundColor('#01000000')") == 2
-assert index_page.count("Row()\n            .width(120).height('100%')") == 1
+assert "Text('Swipe here')" not in index_page
+assert "private drawerHandle()" not in index_page
+assert "backgroundColor('#01000000')" not in index_page
+assert index_page.count(".onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))") == 2
+assert "this.wideLayout = this.landscape || this.viewWidth >= 600" in index_page
+assert "layoutMode: 'navigation'" in index_page
+assert "@State private splitRatio" in index_page
+assert "point.windowX" in index_page
+assert "this.splitRatio = Math.min(0.7, Math.max(0.3, ratio))" in index_page
+assert "this.rightPaneWidth() / Math.max(1, this.viewHeight) >= 265 / 340" in index_page
+assert "layoutMode: this.navigationOnRight() ? 'full' : 'main'" in index_page
+assert "private compactSpeedPanel()" in index_page
+assert "@Prop layoutMode: string = 'full'" in keypad
+assert "return Math.min(36, this.speedAreaHeight())" in keypad
 assert "this.mobilePage = page" in index_page
 assert "this.showMobilePage(1)" in index_page and "this.showMobilePage(2)" in index_page
 for action in ("Start", "Reset", "Resume", "Save", "Configuration"):
@@ -83,7 +98,12 @@ assert "activeProfile" in file_store and "profiles/${this.activeProfileId}" in f
 assert "name.startsWith('autosave-')" in file_store
 for tab in ("Config", "Emulator", "Transfer", "Debugger"):
     assert f"this.tabButton('{tab}'" in settings_drawer
-assert "const PANEL_BG: string = '#000000'" in settings_drawer
+assert "const PANEL_BG: string = '#0B0D10'" in settings_drawer
+assert "const NAV_BG: string = '#12161B'" in settings_drawer
+scroll_position = settings_drawer.rfind("Scroll()")
+bottom_tabs_position = settings_drawer.rfind("this.tabButton('Config', 0)")
+assert scroll_position < bottom_tabs_position, "settings tabs must remain below the content scroll area"
+assert ".align(Alignment.Top)" in settings_drawer
 assert settings_drawer.count("placeholderColor(MUTED)") == 6
 assert settings_drawer.count("caretColor(ACTIVE)") == 6
 for native_api in ("sendFile", "exitPressToTest", "configureDebugger", "enterDebugger",
