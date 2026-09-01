@@ -71,14 +71,28 @@ assert "backgroundColor('#01000000')" not in index_page
 assert index_page.count(".onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))") == 2
 assert "this.wideLayout = this.landscape || this.viewWidth >= 600" in index_page
 assert "layoutMode: 'navigation'" in index_page
+assert "@State private navigationSide" in index_page
 assert "@State private splitRatio" in index_page
-assert "point.windowX" in index_page
 assert "this.splitRatio = Math.min(0.7, Math.max(0.3, ratio))" in index_page
-assert "this.rightPaneWidth() / Math.max(1, this.viewHeight) >= 265 / 340" in index_page
-assert "layoutMode: this.navigationOnRight() ? 'full' : 'main'" in index_page
+assert "this.handleSplitterTouch(event)" in index_page
+assert "private splitterWidth(): number { return 20; }" in index_page
+assert ".hitTestBehavior(HitTestMode.Block)" in index_page
+assert "showSpeed: false" in index_page
+assert "onMoveNavigation: (side: string) => { this.navigationSide = side; }" in index_page
 assert "private compactSpeedPanel()" in index_page
 assert "@Prop layoutMode: string = 'full'" in keypad
+assert "@Prop navigationSide: string = 'left'" in keypad
+assert "this.isNavigationBlank(event.changedTouches[0])" in keypad
+assert "localX >= 38 && localX <= 73" in keypad
+assert "localX >= 192 && localX <= 227" in keypad
+assert "Math.abs(point.windowX - this.navigationOriginX) >= 32" in keypad
 assert "return Math.min(36, this.speedAreaHeight())" in keypad
+assert "private leftInstrumentWidth()" in index_page
+assert "private rightInstrumentWidth()" in index_page
+assert ".aspectRatio(265 / 104)" in index_page
+assert ".aspectRatio(265 / 236)" in index_page
+assert "if (this.layoutMode === 'main') return 236" in keypad
+assert "Blank().height(this.y(10)).backgroundColor('#3F4146')" in keypad
 assert "this.mobilePage = page" in index_page
 assert "this.showMobilePage(1)" in index_page and "this.showMobilePage(2)" in index_page
 for action in ("Start", "Reset", "Resume", "Save", "Configuration"):

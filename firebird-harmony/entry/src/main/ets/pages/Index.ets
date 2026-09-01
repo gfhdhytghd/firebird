@@ -34,6 +34,7 @@ struct Index {
   @State private drawerProgress: number = 0;
   @State private drawerDragging: boolean = false;
   @State private speedLimitMode: number = 1;
+  @State private navigationSide: string = 'left';
   @State private splitRatio: number = 0.5;
   private splitPointer: number = -1;
 
@@ -165,7 +166,7 @@ struct Index {
     return '100%';
   }
 
-  private splitterWidth(): number { return 12; }
+  private splitterWidth(): number { return 20; }
 
   private paneWidth(): number { return Math.max(1, this.viewWidth - this.splitterWidth()); }
 
@@ -173,8 +174,24 @@ struct Index {
 
   private rightPaneWidth(): number { return this.paneWidth() * (1 - this.splitRatio); }
 
-  private navigationOnRight(): boolean {
-    return this.rightPaneWidth() / Math.max(1, this.viewHeight) >= 265 / 340;
+  private leftInstrumentWidth(): number {
+    const heightRatio = 3 / 4 + (this.navigationSide === 'left' ? 104 / 265 : 0);
+    return Math.min(this.leftPaneWidth(), Math.max(1, (this.viewHeight - 36) / heightRatio));
+  }
+
+  private leftInstrumentHeight(): number {
+    const width = this.leftInstrumentWidth();
+    return width * 3 / 4 + 36 + (this.navigationSide === 'left' ? width * 104 / 265 : 0);
+  }
+
+  private rightInstrumentWidth(): number {
+    const baseHeight = this.navigationSide === 'right' ? 340 : 236;
+    return Math.min(this.rightPaneWidth(), Math.max(1, this.viewHeight * 265 / baseHeight));
+  }
+
+  private rightInstrumentHeight(): number {
+    const baseHeight = this.navigationSide === 'right' ? 340 : 236;
+    return this.rightInstrumentWidth() * baseHeight / 265;
   }
 
   private splitterPoint(event: TouchEvent): TouchObject | undefined {
@@ -212,6 +229,7 @@ struct Index {
     .height(36)
     .justifyContent(FlexAlign.Center)
     .alignItems(VerticalAlign.Center)
+    .backgroundColor('#303238')
     .onClick(() => this.cycleSpeedLimit())
   }
 
@@ -247,26 +265,30 @@ struct Index {
       if (this.wideLayout) {
         Row() {
           Column() {
-            Stack({ alignContent: Alignment.Start }) {
-              XComponent({ id: 'firebirdLcdLandscape', type: XComponentType.SURFACE,
-                libraryname: 'firebird_harmony' })
-                .width('100%').height('100%').backgroundColor(Color.Black)
-                .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
-            }.width('100%').aspectRatio(4 / 3)
-            if (this.navigationOnRight()) {
-              Column() {
-                Blank().layoutWeight(1)
-                this.compactSpeedPanel()
-                Blank().layoutWeight(1)
-              }.layoutWeight(1).width('100%')
-            } else {
-              CalculatorKeypad({
-                layoutMode: 'navigation',
-                speed: this.status.speed,
-                speedLimitMode: this.speedLimitMode,
-                onCycleSpeedLimit: () => this.cycleSpeedLimit()
-              }).layoutWeight(1).width('100%')
+            Blank().layoutWeight(1)
+            Column() {
+              Stack({ alignContent: Alignment.Start }) {
+                XComponent({ id: 'firebirdLcdLandscape', type: XComponentType.SURFACE,
+                  libraryname: 'firebird_harmony' })
+                  .width('100%').height('100%').backgroundColor(Color.Black)
+                  .onTouch((event: TouchEvent) => this.handleDrawerSwipe(event))
+              }.width('100%').aspectRatio(4 / 3)
+              this.compactSpeedPanel()
+              if (this.navigationSide === 'left') {
+                CalculatorKeypad({
+                  layoutMode: 'navigation',
+                  showSpeed: false,
+                  navigationSide: this.navigationSide,
+                  speed: this.status.speed,
+                  speedLimitMode: this.speedLimitMode,
+                  onCycleSpeedLimit: () => this.cycleSpeedLimit(),
+                  onMoveNavigation: (side: string) => { this.navigationSide = side; }
+                }).width('100%').aspectRatio(265 / 104)
+              }
             }
+            .width(this.leftInstrumentWidth())
+            .height(this.leftInstrumentHeight())
+            Blank().layoutWeight(1)
           }.width(this.leftPaneWidth()).height('100%')
           Row() {
             Divider().vertical(true).width(2).height(44).color('#899096')
@@ -276,13 +298,33 @@ struct Index {
           .justifyContent(FlexAlign.Center)
           .alignItems(VerticalAlign.Center)
           .backgroundColor('#25282D')
+          .hitTestBehavior(HitTestMode.Block)
           .onTouch((event: TouchEvent) => this.handleSplitterTouch(event))
-          CalculatorKeypad({
-            layoutMode: this.navigationOnRight() ? 'full' : 'main',
-            speed: this.status.speed,
-            speedLimitMode: this.speedLimitMode,
-            onCycleSpeedLimit: () => this.cycleSpeedLimit()
-          }).layoutWeight(1).height('100%')
+          Column() {
+            Blank().layoutWeight(1)
+            Column() {
+              if (this.navigationSide === 'right') {
+                CalculatorKeypad({
+                  layoutMode: 'navigation',
+                  showSpeed: false,
+                  navigationSide: this.navigationSide,
+                  speed: this.status.speed,
+                  speedLimitMode: this.speedLimitMode,
+                  onCycleSpeedLimit: () => this.cycleSpeedLimit(),
+                  onMoveNavigation: (side: string) => { this.navigationSide = side; }
+                }).width('100%').aspectRatio(265 / 104)
+              }
+              CalculatorKeypad({
+                layoutMode: 'main',
+                speed: this.status.speed,
+                speedLimitMode: this.speedLimitMode,
+                onCycleSpeedLimit: () => this.cycleSpeedLimit()
+              }).width('100%').aspectRatio(265 / 236)
+            }
+            .width(this.rightInstrumentWidth())
+            .height(this.rightInstrumentHeight())
+            Blank().layoutWeight(1)
+          }.layoutWeight(1).height('100%')
         }.width('100%').height('100%').backgroundColor('#303238')
       } else {
         this.emulatorView()
